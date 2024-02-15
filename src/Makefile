@@ -23,8 +23,8 @@ syntax_check.o: syntax_check.c actions.h
 db_loader.o: db_loader.c actions.h
 	gcc $(CFLAGS) -c db_loader.c
     
-syntax_check: lex.yy.c metta.tab.c metta.tab.h syntax_check.o
-	gcc -o syntax_check metta.tab.c lex.yy.c syntax_check.o
+syntax_check: lex.yy.c metta.tab.c metta.tab.h syntax_check.o $(UTIL_OBJS)
+	gcc -o syntax_check metta.tab.c lex.yy.c syntax_check.o $(UTIL_OBJS) $(LDFLAGS)
 	mv syntax_check ../bin
 
 db_loader: lex.yy.c metta.tab.c metta.tab.h db_loader.o $(UTIL_OBJS)
@@ -38,4 +38,4 @@ test_mongo: test_mongo.o
 	gcc -o test_mongo test_mongo.o $(LDFLAGS)
 
 clean:
-	rm metta.tab.c lex.yy.c metta.tab.h metta.output $(ACTION_OBJS) $(UTIL_OBJS)
+	$(RM) metta.tab.c lex.yy.c metta.tab.h metta.output $(ACTION_OBJS) $(UTIL_OBJS)

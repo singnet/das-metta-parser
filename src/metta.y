@@ -3,11 +3,13 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include "actions.h"
+#include "action_util.h"
 
 extern int yylex();
 extern int yyparse();
 extern FILE* yyin;
 extern void yyerror(const char* s);
+unsigned long INPUT_LINE_COUNT;
 
 %}
 
@@ -105,13 +107,25 @@ literal: T_QUOTED_STR { $$ = literal_string($1); }
 
 struct HandleList EMPTY_HANDLE_LIST;
 
-int main() {
+int main(int argc, char *argv[]) {
 
     EMPTY_HANDLE_LIST.size = 0;
     EMPTY_HANDLE_LIST.elements = NULL;
     EMPTY_HANDLE_LIST.elements_type = NULL;
 
-	yyin = stdin;
+    if (argc != 2) {
+        fprintf(stderr, "Usage: %s <input file path>\n", argv[0]);
+        exit(1);
+    }
+
+    INPUT_LINE_COUNT = get_line_count(argv[1]);
+    
+	yyin = fopen(argv[1], "r");
+    if (yyin == NULL) {
+        yyerror("Invalid input file path\n");
+        exit(1);
+    }
+
     initialize_actions();
 	do {
 		yyparse();

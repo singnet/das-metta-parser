@@ -9,6 +9,7 @@
 #include "expression_hasher.h"
 
 extern int yylineno;
+extern unsigned long INPUT_LINE_COUNT;
 
 // Private stuff
   
@@ -26,7 +27,7 @@ static bson_t *MONGODB_REPLACE_OPTIONS = NULL;
 static bson_t *MONGODB_INSERT_MANY_OPTIONS = NULL;
 
 // Atom insertion buffers
-#define EXPRESSION_BUFFER_SIZE ((unsigned int) 1000000)
+#define EXPRESSION_BUFFER_SIZE ((unsigned int) 100000)
 static unsigned int EXPRESSION_BUFFER_CURSOR = 0;
 struct BufferedExpression {
     bool is_toplevel;
@@ -55,6 +56,9 @@ static char *COMPOSITE_TYPE_TYPEDEF_HASH = NULL;
     S != METTA_TYPE_HASH && \
     S != TYPEDEF_MARK_HASH && \
     S != COMPOSITE_TYPE_TYPEDEF_HASH) free(S);
+
+// Progress bar defaults
+static unsigned int PROGRESS_BAR_LENGTH = 50;
 
 static void mongodb_destroy() {
     mongoc_database_destroy(MONGODB);
@@ -296,6 +300,7 @@ static void flush_expression_buffer() {
         // XXX TODO free(composite_type_hash);
     }
     free(bulk_insertion_buffer);
+    print_progress_bar(yylineno, INPUT_LINE_COUNT, PROGRESS_BAR_LENGTH, 1, 1, false);
 }
 
 static char *add_expression(bool is_toplevel, struct HandleList composite) {
@@ -329,12 +334,14 @@ void initialize_actions() {
     char *composite_type_typedef[3] = {TYPEDEF_MARK_HASH, TYPE_HASH, TYPE_HASH};
     COMPOSITE_TYPE_TYPEDEF_HASH = composite_hash((char **) composite_type_typedef, 3);
     insert_commom_atoms();
+    print_progress_bar(yylineno, INPUT_LINE_COUNT, PROGRESS_BAR_LENGTH, 1, 1, false);
 }
 
 void finalize_actions() {
     if (EXPRESSION_BUFFER_CURSOR > 0) {
         flush_expression_buffer();
     }
+    print_progress_bar(INPUT_LINE_COUNT, INPUT_LINE_COUNT, PROGRESS_BAR_LENGTH, 1, 1, true);
 }
 
 char *toplevel_expression(struct HandleList composite) {
