@@ -1,0 +1,20 @@
+FROM ubuntu:latest AS builder
+
+RUN apt-get update -y \
+    && apt-get install -y build-essential bison flex
+
+WORKDIR /opt/das-metta-parser
+
+RUN mkdir ../bin
+
+COPY ../src ./
+
+RUN make das_metta_parser clean
+
+FROM ubuntu:latest AS prod
+
+WORKDIR /usr/local/bin
+
+COPY --from=builder /opt/bin/das_metta_parser .
+
+ENTRYPOINT [ "das_metta_parser" ]
