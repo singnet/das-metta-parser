@@ -17,12 +17,12 @@
 [[:space:]] ;
 [0-9]+\.[0-9]+ {
     yylval.fval = atof(yytext); 
-    if (DEBUG) { fprintf(stderr, "T_FLOAT %f\n", yylval.fval); }
+    if (DEBUG) { fprintf(stderr, "T_FLOAT %g\n", yylval.fval); }
     return T_FLOAT;
 }
 [0-9]+ {
     yylval.ival = atoi(yytext); 
-    if (DEBUG) { fprintf(stderr, "T_INT %d\n", yylval.ival); }
+    if (DEBUG) { fprintf(stderr, "T_INT %ld\n", yylval.ival); }
     return T_INT;
 }
 "(" {
@@ -49,7 +49,7 @@
     if (DEBUG) { fprintf(stderr, "T_TYPE\n"); }
     return T_TYPE;
 }
-[^[:space:]:()<>-]+ {
+[^[:space:]:()<>\-"]+ {
     yylval.sval = yytext; 
     if (DEBUG) { fprintf(stderr, "T_SYMBOL <%s>\n", yytext); }
     return T_SYMBOL;
