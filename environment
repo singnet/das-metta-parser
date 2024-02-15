@@ -1,0 +1,4 @@
+export DAS_MONGODB_HOSTNAME=localhost
+export DAS_MONGODB_PORT=28000
+export DAS_MONGODB_USERNAME=dbadmin
+export DAS_MONGODB_PASSWORD=dassecret
