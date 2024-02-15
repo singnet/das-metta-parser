@@ -223,7 +223,7 @@ static void destroy_handle_list(struct HandleList *handle_list) {
 
 static void destroy_buffered_expression(struct BufferedExpression *expression) {
     // XXX TODO Fix memory leak
-    //DESTROY_HANDLE(expression->hash);
+    DESTROY_HANDLE(expression->hash);
     destroy_handle_list(&(expression->composite));
     expression->hash = NULL;
 }
@@ -302,7 +302,7 @@ static char *add_expression(bool is_toplevel, struct HandleList composite) {
     char *hash = expression_hash(EXPRESSION_HASH, composite.elements, composite.size);
     EXPRESSION_BUFFER[EXPRESSION_BUFFER_CURSOR].is_toplevel = is_toplevel;
     EXPRESSION_BUFFER[EXPRESSION_BUFFER_CURSOR].composite = composite;
-    EXPRESSION_BUFFER[EXPRESSION_BUFFER_CURSOR].hash = hash;
+    EXPRESSION_BUFFER[EXPRESSION_BUFFER_CURSOR].hash = string_copy(hash);
     EXPRESSION_BUFFER_CURSOR++;
     if (EXPRESSION_BUFFER_CURSOR == EXPRESSION_BUFFER_SIZE) {
         flush_expression_buffer();
