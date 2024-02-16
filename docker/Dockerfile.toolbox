@@ -1,7 +1,30 @@
 FROM ubuntu:latest AS builder
 
-RUN apt-get update -y \
-    && apt-get install -y build-essential bison flex
+ENV C_INCLUDE_PATH=/usr/include/libmongoc-1.0:/usr/include/libbson-1.0
+
+RUN apt-get update -y && apt-get install -y \
+    build-essential \
+    bison \
+    flex \
+    libmongoc-dev \
+    libhiredis-dev\
+    git \
+    cmake \
+    python3-pip \
+    libmbedtls14 \
+    libmbedtls-dev
+
+RUN \
+    cd /tmp &&\
+    git clone https://github.com/sewenew/redis-plus-plus.git &&\
+    cd redis-plus-plus &&\
+    mkdir build &&\
+    cd build &&\
+    cmake .. &&\
+    make &&\
+    make install
+
+RUN pip3 install hyperon-das
 
 WORKDIR /opt/das-metta-parser
 
@@ -9,12 +32,12 @@ RUN mkdir ../bin
 
 COPY ../src ./
 
-RUN make das_metta_parser clean
+RUN make syntax_check
 
 FROM ubuntu:latest AS prod
 
 WORKDIR /usr/local/bin
 
-COPY --from=builder /opt/bin/das_metta_parser .
+COPY --from=builder /opt/bin/syntax_check .
 
-ENTRYPOINT [ "das_metta_parser" ]
+ENTRYPOINT [ "syntax_check" ]
