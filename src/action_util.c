@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include "action_util.h"
 #include "limits.h"
@@ -16,22 +17,24 @@ char *string_copy(char *source) {
     return answer;
 }
 
+static unsigned int PREVIOUS_FILLED_LENGTH = 0;
 void print_progress_bar(
         unsigned int iteration, 
         unsigned int total, 
         unsigned int length, 
         unsigned int step, 
-        unsigned int max_step) {
+        unsigned int max_step,
+        bool print_eol) {
 
     unsigned int filled_length = (unsigned int) (((float) iteration / total) * length);
-    unsigned int previous = (unsigned int) ((((float) iteration - 1) / total) * length);
-    if (iteration == 1 || filled_length > previous || iteration >= total) {
+    if (iteration == 1 || filled_length > PREVIOUS_FILLED_LENGTH || iteration >= total) {
+        PREVIOUS_FILLED_LENGTH = filled_length;
         if (iteration > total) {
             iteration = total;
         }
         char percent[16];
         sprintf(percent, "%.0f", (float) 100 * ((float) iteration / (float) total));
-        char fill='#';
+        char fill = '#';
         char line[1024];
         unsigned int cursor = 0;
         for (unsigned int i = 0; i < filled_length; i++) {
@@ -40,7 +43,35 @@ void print_progress_bar(
         for (unsigned int i = 0; i < length - filled_length; i++) {
             line[cursor++] = '-';
         }
+        line[cursor] = '\0';
         printf("\r STEP %d/%d Progress: |%s| %s%% complete (%d/%d)", step, max_step, line, percent, iteration, total);
+        if (print_eol) {
+            printf("\n");
+        }
         fflush(stdout);
     }
 }
+
+unsigned long get_line_count(char *fname) {
+
+    unsigned int MAX_PATH_LENGTH = 1024;
+    FILE *fp;
+    char command_line[MAX_PATH_LENGTH];
+    char output[MAX_PATH_LENGTH];
+  
+    if ((strlen(fname) + 20) > MAX_PATH_LENGTH) {
+        yyerror("Input file path is too long.");
+        exit(1);
+    }
+
+    sprintf(command_line, "wc -l %s", fname);
+    fp = popen(command_line, "r");
+    if (fp == NULL) {
+        yyerror("Failed to run wc on input file\n");
+        exit(1);
+    }
+    fgets(output, sizeof(output), fp);
+    pclose(fp);
+    return atoi(output);
+}
+
