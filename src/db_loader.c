@@ -28,13 +28,23 @@ static bson_t *MONGODB_INSERT_MANY_OPTIONS = NULL;
 
 // Atom insertion buffers
 #define EXPRESSION_BUFFER_SIZE ((unsigned int) 100000)
+#define SYMBOL_BUFFER_SIZE ((unsigned int) 300000)
 static unsigned int EXPRESSION_BUFFER_CURSOR = 0;
+static unsigned int SYMBOL_BUFFER_CURSOR = 0;
 struct BufferedExpression {
     bool is_toplevel;
     struct HandleList composite;
     char *hash;
 };
+struct BufferedSymbol {
+    bool is_literal;
+    long value_as_int;
+    long value_as_float;
+    char *hash;
+    char *name;
+};
 struct BufferedExpression EXPRESSION_BUFFER[EXPRESSION_BUFFER_SIZE];
+struct BufferedSymbol SYMBOL_BUFFER[SYMBOL_BUFFER_SIZE];
 
 // Reusable types and hashes
 static char *SYMBOL = "Symbol";
@@ -155,14 +165,29 @@ static void add_typedef(char *child_type, char *parent_type) {
     }
 }
 
-static char *add_symbol(char *name, bool is_literal, long value_as_int, double value_as_float) {
+static void destroy_buffered_symbol(struct BufferedSymbol *symbol) {
+    DESTROY_HANDLE(symbol->hash);
+    free(symbol->name);
+    symbol->hash = NULL;
+}
 
-    // printf("ADD SYMBOL %s\n", name);
+static void symbol_copy(struct BufferedSymbol *s1, struct BufferedSymbol *s2) {
+    destroy_buffered_symbol(s1);
+    s1->hash = string_copy(s2->hash);
+    s1->name = string_copy(s2->name);
+    s1->is_literal = s2->is_literal;
+    s1->value_as_int = s2->value_as_int;
+    s1->value_as_float = s2->value_as_float;
+}
 
-    bson_t *selector = bson_new();
+static int symbol_cmp(const void *s1, const void *s2) {
+    return strcmp(
+        ((struct BufferedSymbol *) s1)->hash,
+        ((struct BufferedSymbol *) s2)->hash);
+}
+
+static bson_t *build_symbol_bson_document(char *hash, char *name, bool is_literal, long value_as_int, double value_as_float) {
     bson_t *doc = bson_new();
-    char *hash = terminal_hash(SYMBOL, name);
-    BSON_APPEND_UTF8(selector, "_id", hash);
     BSON_APPEND_UTF8(doc, "_id", hash);
     BSON_APPEND_UTF8(doc, "composite_type_hash", SYMBOL_HASH);
     BSON_APPEND_UTF8(doc, "name", name);
@@ -174,17 +199,71 @@ static char *add_symbol(char *name, bool is_literal, long value_as_int, double v
     if (value_as_float != DBL_MIN) {
         BSON_APPEND_DOUBLE(doc, "value_as_float", value_as_float);
     }
-    /*
-    if (! mongoc_collection_replace_one(MONGODB_NODES, selector, doc, MONGODB_REPLACE_OPTIONS, NULL, &MONGODB_ERROR)) {
-        mongodb_error((char *) &MONGODB_ERROR.message);
-    } else {
-        bson_destroy(selector);
-        bson_destroy(doc);
-    }
-    */
-    bson_destroy(selector); // XXXXXXXXXXXXXXXXXXXXXXXXXXXX
-    bson_destroy(doc); // XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+    return doc;
+}
 
+static void flush_symbol_buffer() {
+
+    qsort(SYMBOL_BUFFER, 
+          SYMBOL_BUFFER_CURSOR, 
+          sizeof(struct BufferedSymbol), 
+          symbol_cmp);
+
+    unsigned int cursor1 = 1;
+    unsigned int cursor2 = 1;
+    while (cursor2 < SYMBOL_BUFFER_CURSOR) {
+        if (! strcmp(SYMBOL_BUFFER[cursor1 - 1].hash, SYMBOL_BUFFER[cursor2].hash)) {
+            cursor2++;
+        } else {
+            if (cursor1 != cursor2) {
+                symbol_copy(&(SYMBOL_BUFFER[cursor1]), &(SYMBOL_BUFFER[cursor2]));
+            }
+            cursor1++;
+            cursor2++;
+        }
+    }
+    unsigned int new_size = cursor1;
+
+    while (cursor1 < SYMBOL_BUFFER_CURSOR) {
+        destroy_buffered_symbol(&(SYMBOL_BUFFER[cursor1++]));
+    }
+    SYMBOL_BUFFER_CURSOR = 0;
+
+    bson_t **bulk_insertion_buffer = (bson_t **) malloc(new_size * sizeof(bson_t *));
+    for (unsigned int i = 0; i < new_size; i++) {
+        bulk_insertion_buffer[i] = build_symbol_bson_document(
+                SYMBOL_BUFFER[i].hash,
+                SYMBOL_BUFFER[i].name,
+                SYMBOL_BUFFER[i].is_literal,
+                SYMBOL_BUFFER[i].value_as_int,
+                SYMBOL_BUFFER[i].value_as_float);
+    }
+    mongoc_collection_insert_many(
+            MONGODB_NODES,
+            (const bson_t **) bulk_insertion_buffer,
+            new_size,
+            MONGODB_INSERT_MANY_OPTIONS,
+            NULL,
+            &MONGODB_ERROR);
+
+    for (unsigned int i = 0; i < new_size; i++) {
+        bson_destroy(bulk_insertion_buffer[i]);
+    }
+    free(bulk_insertion_buffer);
+    print_progress_bar(yylineno, INPUT_LINE_COUNT, PROGRESS_BAR_LENGTH, 1, 1, false);
+}
+
+static char *add_symbol(char *name, bool is_literal, long value_as_int, double value_as_float) {
+    char *hash = terminal_hash(SYMBOL, name);
+    SYMBOL_BUFFER[SYMBOL_BUFFER_CURSOR].is_literal = is_literal;
+    SYMBOL_BUFFER[SYMBOL_BUFFER_CURSOR].value_as_int = value_as_int;
+    SYMBOL_BUFFER[SYMBOL_BUFFER_CURSOR].value_as_float = value_as_float;
+    SYMBOL_BUFFER[SYMBOL_BUFFER_CURSOR].hash = string_copy(hash);
+    SYMBOL_BUFFER[SYMBOL_BUFFER_CURSOR].name = string_copy(name);
+    SYMBOL_BUFFER_CURSOR++;
+    if (SYMBOL_BUFFER_CURSOR == SYMBOL_BUFFER_SIZE) {
+        flush_symbol_buffer();
+    }
     return hash;
 }
 
@@ -288,6 +367,7 @@ static void flush_expression_buffer() {
                 &(EXPRESSION_BUFFER[i].composite));
     }
     mongoc_collection_insert_many(
+            // XXX TODO Fix mongodb collections
             MONGODB_LINKS_N,
             (const bson_t **) bulk_insertion_buffer,
             new_size,
@@ -297,9 +377,6 @@ static void flush_expression_buffer() {
 
     for (unsigned int i = 0; i < new_size; i++) {
         bson_destroy(bulk_insertion_buffer[i]);
-        // XXX TODO bson_destroy(composite_type_doc);
-        // XXX TODO free(composite_type);
-        // XXX TODO free(composite_type_hash);
     }
     free(bulk_insertion_buffer);
     print_progress_bar(yylineno, INPUT_LINE_COUNT, PROGRESS_BAR_LENGTH, 1, 1, false);
