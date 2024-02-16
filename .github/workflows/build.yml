@@ -34,11 +34,17 @@ jobs:
       - name: Build Binary
         run: ./scripts/build.sh
 
-      - name: Upload das-metta-parser artifact
+      - name: Upload syntax_check artifact
         uses: actions/upload-artifact@v4
         with:
-          name: das-metta-parser
-          path: bin/das_metta_parser
+          name: syntax_check
+          path: bin/syntax_check
+
+      - name: Upload db_loader artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: db_loader
+          path: bin/db_loader
 
   build-image:
     runs-on: ubuntu-latest
