@@ -208,6 +208,7 @@ static bson_t *build_expression_bson_document(char *hash, bool is_toplevel, stru
     }
     free(composite_type);
     BSON_APPEND_ARRAY(doc, "composite_type", composite_type_doc);
+    bson_destroy(composite_type_doc);
     BSON_APPEND_UTF8(doc, "named_type", EXPRESSION);
     BSON_APPEND_UTF8(doc, "named_type_hash", EXPRESSION_HASH);
     char key_tag[8];
