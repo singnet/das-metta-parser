@@ -34,9 +34,18 @@ unsigned long INPUT_LINE_COUNT;
 %token T_COLON T_LESSTHANCOLON T_ARROW
 %token T_NEWLINE
 
-%type<sval> toplevel_expression
-%type<eval> expression_list
+%type<eval> type_desc
+%type<eval> type_desc_list
 %type<eval> expression
+%type<eval> expression_list
+
+%type<sval> typedef
+%type<sval> inherited_typedef
+%type<sval> base_typedef
+%type<sval> symbol_typedef
+%type<sval> function_typedef
+%type<sval> toplevel
+%type<sval> toplevel_expression
 %type<sval> literal
 
 %start start
@@ -49,47 +58,47 @@ start:
      | toplevel_list
 ;
 
-toplevel_list: top_level
-             | toplevel_list top_level
+toplevel_list: toplevel
+             | toplevel_list toplevel
 ;
 
-top_level: typedef
-         | toplevel_expression
+toplevel: typedef              { typedef_base($1);      }
+         | toplevel_expression { typedef_inherited($1); }
 ;
 
-typedef: base_typedef
-       | inherited_typedef
+typedef: base_typedef      { $$ = $1; }
+       | inherited_typedef { $$ = $1; }
 ;
 
-base_typedef: symbol_typedef
-            | T_LEFTP T_COLON T_SYMBOL function_typedef T_RIGHTP
+base_typedef: symbol_typedef                                     { $$ = $1; }
+            | T_LEFTP T_COLON T_SYMBOL function_typedef T_RIGHTP { $$ = base_typedef_function($3, $4); }
 ;
 
-inherited_typedef: T_LEFTP T_LESSTHANCOLON T_SYMBOL T_SYMBOL T_RIGHTP
+inherited_typedef: T_LEFTP T_LESSTHANCOLON T_SYMBOL T_SYMBOL T_RIGHTP { $$ = inherited_typedef($3, $4); }
 ;
 
-symbol_typedef: T_LEFTP T_COLON T_SYMBOL T_TYPE T_RIGHTP
-              | T_LEFTP T_COLON T_SYMBOL T_SYMBOL T_RIGHTP
-              | T_LEFTP T_COLON literal T_TYPE T_RIGHTP
-              | T_LEFTP T_COLON literal T_SYMBOL T_RIGHTP
+symbol_typedef: T_LEFTP T_COLON T_SYMBOL T_TYPE T_RIGHTP   { $$ = symbol_typedef_symbol_type($3);        }
+              | T_LEFTP T_COLON T_SYMBOL T_SYMBOL T_RIGHTP { $$ = symbol_typedef_symbol_symbol($3, $4);  }
+              | T_LEFTP T_COLON literal T_TYPE T_RIGHTP    { $$ = symbol_typedef_literal_type($3);       }
+              | T_LEFTP T_COLON literal T_SYMBOL T_RIGHTP  { $$ = symbol_typedef_literal_symbol($3, $4); }
 ;
 
-function_typedef: T_LEFTP T_ARROW type_desc_list T_RIGHTP
+function_typedef: T_LEFTP T_ARROW type_desc_list T_RIGHTP { $$ = function_typedef($3); }
 ;
 
-type_desc_list: type_desc
-              | type_desc_list type_desc
+type_desc_list: type_desc                { $$ = type_desc_list_base($1);          }
+              | type_desc_list type_desc { $$ = type_desc_list_recursion($1, $2); }
 ;
 
-type_desc: T_TYPE
-         | T_SYMBOL
-         | function_typedef
+type_desc: T_TYPE           { $$ = type_desc_type($1);     }
+         | T_SYMBOL         { $$ = type_desc_symbol($1);   }
+         | function_typedef { $$ = type_desc_function($1); }
 ;
 
 toplevel_expression: T_LEFTP expression_list T_RIGHTP { $$ = toplevel_expression($2); }
 ;
 
-expression_list: expression                 { $$ = expression_list_base($1); }
+expression_list: expression                 { $$ = expression_list_base($1);          }
                | expression_list expression { $$ = expression_list_recursion($1, $2); }
 ;
 
