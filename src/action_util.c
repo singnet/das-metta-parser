@@ -26,6 +26,9 @@ void print_progress_bar(
         unsigned int max_step,
         bool print_eol) {
 
+    if (total <= length) {
+        return;
+    }
     unsigned int filled_length = (unsigned int) (((float) iteration / total) * length);
     if (iteration == 1 || filled_length > PREVIOUS_FILLED_LENGTH || iteration >= total) {
         PREVIOUS_FILLED_LENGTH = filled_length;
