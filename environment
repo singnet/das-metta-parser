@@ -1,3 +1,5 @@
+export DAS_REDIS_HOSTNAME=localhost
+export DAS_REDIS_PORT=29000
 export DAS_MONGODB_HOSTNAME=localhost
 export DAS_MONGODB_PORT=28000
 export DAS_MONGODB_USERNAME=dbadmin
