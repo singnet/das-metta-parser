@@ -8,7 +8,7 @@ lex.yy.c: metta.l metta.tab.h
 
 ACTION_OBJS = syntax_check.o db_loader.o
 UTIL_OBJS = expression_hasher.o action_util.o
-LDFLAGS = -lmbedcrypto -lmongoc-1.0 -lbson-1.0
+LDFLAGS = -lmbedcrypto -lmongoc-1.0 -lbson-1.0 -lhiredis
 CFLAGS = -Wall
 
 expression_hasher.o: expression_hasher.c expression_hasher.h
