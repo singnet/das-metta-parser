@@ -4,7 +4,7 @@
 #include <float.h>
 #include <stdlib.h>
 #include <signal.h>
-#include <hiredis.h>
+#include <hiredis_cluster/hircluster.h>
 
 #include "actions.h"
 #include "limits.h"
@@ -33,7 +33,20 @@ static bson_t *MONGODB_REPLACE_OPTIONS = NULL;
 static bson_t *MONGODB_INSERT_MANY_OPTIONS = NULL;
 
 // Redis reusable globals
-static redisContext *REDIS = NULL;
+#ifdef DB_LOADER_USE_REDIS_CLUSTER
+#define REDIS_APPEND_COMMAND_MACRO redisClusterAppendCommand
+#define REDIS_APPEND_COMMAND_ARGV_MACRO redisClusterAppendCommandArgv
+#define REDIS_GET_REPLAY_MACRO redisClusterGetReply
+#define REDIS_FREE_MACRO redisClusterFree
+#define REDIS_CONTEXT_MACRO redisClusterContext
+#else
+#define REDIS_APPEND_COMMAND_MACRO redisAppendCommand
+#define REDIS_APPEND_COMMAND_ARGV_MACRO redisAppendCommandArgv
+#define REDIS_GET_REPLAY_MACRO redisGetReply
+#define REDIS_FREE_MACRO redisFree
+#define REDIS_CONTEXT_MACRO redisContext
+#endif
+static REDIS_CONTEXT_MACRO *REDIS = NULL;
 static char REDIS_KEY[MAX_REDIS_KEY_SIZE];
 static unsigned int HASH_SIZE = 0;
 static unsigned int MAX_INDEXABLE_ARITY = 4;
@@ -164,8 +177,15 @@ static void redis_setup() {
         exit(1);
     }
     printf("Connecting to Redis at %s:%s\n", host, port);
+#ifdef DB_LOADER_USE_REDIS_CLUSTER
+    char *redis_address = (char *) malloc((strlen(host) + strlen(port) + 2) * sizeof(char));
+    sprintf(redis_address, "%s:%s", host, port);
+    REDIS = redisClusterConnect(redis_address, 0);
+    free(redis_address);
+#else
     REDIS = redisConnect(host, atoi(port));
-    if (! REDIS) {
+#endif
+    if (REDIS == NULL) {
         printf("Connection error.\n");
         exit(1);
     }
@@ -260,7 +280,7 @@ static bson_t *build_symbol_bson_document(char *hash, char *name, bool is_litera
 
 static void flush_redis_commands() {
     for (unsigned int i = 0; i < PENDING_REDIS_COMMANDS; i++) {
-        if (redisGetReply(REDIS, NULL) != REDIS_OK) {
+        if (REDIS_GET_REPLAY_MACRO(REDIS, NULL) != REDIS_OK) {
             printf("REDIS ERROR\n");
         }
     }
@@ -296,12 +316,7 @@ static void flush_symbol_buffer() {
 
     bson_t **bulk_insertion_buffer = (bson_t **) malloc(new_size * sizeof(bson_t *));
     for (unsigned int i = 0; i < new_size; i++) {
-        redisAppendCommand(
-                REDIS,
-                "SET %s:%s %s" ,
-                NAMED_ENTITIES,
-                SYMBOL_BUFFER[i].hash,
-                SYMBOL_BUFFER[i].name);
+        REDIS_APPEND_COMMAND_MACRO(REDIS, "SET %s:%s %s" , NAMED_ENTITIES, SYMBOL_BUFFER[i].hash, SYMBOL_BUFFER[i].name);
         PENDING_REDIS_COMMANDS++;
 
         bulk_insertion_buffer[i] = build_symbol_bson_document(
@@ -375,7 +390,7 @@ static char *add_typedef(char *child_type, bool child_is_hash, char *parent_type
 
 static void add_redis_pattern(char **composite_key, unsigned int arity, char *value) {
     char *key = composite_hash(composite_key, arity);
-    redisAppendCommand(REDIS, "%s %s:%s %s", SADD, PATTERNS, key, value);
+    REDIS_APPEND_COMMAND_MACRO(REDIS, "%s %s:%s %s", SADD, PATTERNS, key, value);
     PENDING_REDIS_COMMANDS++;
     free(key);
 }
@@ -389,10 +404,10 @@ static void add_redis_indexes(char *hash, struct HandleList *composite, char *co
     argv[1] = REDIS_KEY;
     for (unsigned int i = 0; i < composite->size; i++) {
         argv[i + 2] = composite->elements[i];
-        redisAppendCommand(REDIS, "%s %s:%s %s", SADD, INCOMMING_SET, composite->elements[i], hash);
+        REDIS_APPEND_COMMAND_MACRO(REDIS, "%s %s:%s %s", SADD, INCOMMING_SET, composite->elements[i], hash);
         PENDING_REDIS_COMMANDS++;
     }
-    redisAppendCommandArgv(REDIS, composite->size + 2, (const char **) argv, NULL);
+    REDIS_APPEND_COMMAND_ARGV_MACRO(REDIS, composite->size + 2, (const char **) argv, NULL);
     free(argv);
 
     // hash + targets used in temnplates and patterns
@@ -408,7 +423,7 @@ static void add_redis_indexes(char *hash, struct HandleList *composite, char *co
     VALUE_BUFFER[cursor] = '\0';
 
     // Templates
-    redisAppendCommand(REDIS, "%s %s:%s %s", SADD, TEMPLATES, composite_type_hash, VALUE_BUFFER);
+    REDIS_APPEND_COMMAND_MACRO(REDIS, "%s %s:%s %s", SADD, TEMPLATES, composite_type_hash, VALUE_BUFFER);
     PENDING_REDIS_COMMANDS++;
 
     // Patterns
@@ -622,7 +637,7 @@ void finalize_actions() {
     if (EXPRESSION_BUFFER_CURSOR > 0) {
         flush_expression_buffer();
     }
-    redisFree(REDIS);
+    REDIS_FREE_MACRO(REDIS);
     mongodb_destroy();
 
 #ifndef SUPPRESS_PROGRESS_BAR
