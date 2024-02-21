@@ -1,5 +1,6 @@
 FROM ubuntu:latest
-RUN apt-get update -y && apt-get install -y \
+RUN apt-get update -y
+RUN apt-get install -y \
     build-essential \
     bison \
     flex \
@@ -10,17 +11,14 @@ RUN apt-get update -y && apt-get install -y \
     python3-pip \
     libmbedtls14 \
     libmbedtls-dev
-RUN \
-    cd /tmp &&\
-    git clone https://github.com/sewenew/redis-plus-plus.git &&\
-    cd redis-plus-plus &&\
-    mkdir build &&\
-    cd build &&\
-    cmake .. &&\
+COPY assets/hiredis.tgz /tmp
+RUN cd /tmp &&\
+    tar xzf hiredis.tgz &&\
+    cd hiredis &&\
     make &&\
     make install
 RUN pip3 install hyperon-das
-ENV C_INCLUDE_PATH=/usr/include/libmongoc-1.0:/usr/include/libbson-1.0
+ENV C_INCLUDE_PATH=/usr/include/libmongoc-1.0:/usr/include/libbson-1.0:/usr/include/hiredis/
 RUN mkdir /opt/das-metta-parser
 VOLUME /opt/das-metta-parser
 WORKDIR /opt/das-metta-parser

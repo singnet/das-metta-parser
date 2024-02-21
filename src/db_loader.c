@@ -3,18 +3,22 @@
 #include <limits.h>
 #include <float.h>
 #include <stdlib.h>
+#include <signal.h>
+#include <hiredis.h>
+
 #include "actions.h"
+#include "limits.h"
 #include "handle_list.h"
 #include "action_util.h"
 #include "expression_hasher.h"
 
-#define DEBUG (0)
+#include <unistd.h>
 
 extern int yylineno;
 extern unsigned long INPUT_LINE_COUNT;
 
 // Private stuff
-  
+
 // MongoDB reusable globals
 static mongoc_database_t *MONGODB = NULL;
 static mongoc_client_t *MONGODB_CLIENT = NULL;
@@ -27,6 +31,23 @@ static bson_t MONGODB_REPLY = BSON_INITIALIZER;
 static bson_error_t MONGODB_ERROR = {0};
 static bson_t *MONGODB_REPLACE_OPTIONS = NULL;
 static bson_t *MONGODB_INSERT_MANY_OPTIONS = NULL;
+
+// Redis reusable globals
+static redisContext *REDIS = NULL;
+static char REDIS_KEY[MAX_REDIS_KEY_SIZE];
+static unsigned int HASH_SIZE = 0;
+static unsigned int MAX_INDEXABLE_ARITY = 4;
+static unsigned int PENDING_REDIS_COMMANDS = 0;
+static char WILDCARD[] = "*";
+static char **KEY_BUFFER = NULL;
+static char *VALUE_BUFFER = NULL;
+static char RPUSH[] = "RPUSH";
+static char SADD[] = "SADD";
+static char NAMED_ENTITIES[] = "names";
+static char OUTGOING_SET[] = "outgoing_set";
+static char INCOMMING_SET[] = "incomming_set";
+static char TEMPLATES[] = "templates";
+static char PATTERNS[] = "patterns";
 
 // Atom insertion buffers
 #define EXPRESSION_BUFFER_SIZE ((unsigned int) 100000)
@@ -73,7 +94,7 @@ static char *COMPOSITE_TYPE_TYPEDEF_HASH = NULL;
     S != COMPOSITE_TYPE_TYPEDEF_HASH) free(S);
 
 // Progress bar defaults
-static unsigned int PROGRESS_BAR_LENGTH = 50;
+static unsigned int PROGRESS_BAR_LENGTH = 60;
 
 static void mongodb_destroy() {
     mongoc_database_destroy(MONGODB);
@@ -131,6 +152,31 @@ static void mongodb_setup() {
     MONGODB_INSERT_MANY_OPTIONS = bson_new();
     BSON_APPEND_BOOL(MONGODB_INSERT_MANY_OPTIONS, "ordered", false);
     BSON_APPEND_BOOL(MONGODB_INSERT_MANY_OPTIONS, "bypassDocumentValidation", true);
+}
+
+static void redis_setup() {
+
+    char *host = getenv("DAS_REDIS_HOSTNAME");
+    char *port = getenv("DAS_REDIS_PORT");
+
+    if (host == NULL || port == NULL) {
+        fprintf(stderr, "You need to set Redis access info as environment variables\n");
+        exit(1);
+    }
+    printf("Connecting to Redis at %s:%s\n", host, port);
+    REDIS = redisConnect(host, atoi(port));
+    if (! REDIS) {
+        printf("Connection error.\n");
+        exit(1);
+    }
+    if (REDIS->err) {
+        printf("Redis error: %s\n", REDIS->errstr);
+        exit(1);
+    }
+
+    HASH_SIZE = strlen(SYMBOL_HASH);
+    KEY_BUFFER = (char **) malloc(MAX_INDEXABLE_ARITY * sizeof(char *));
+    VALUE_BUFFER = (char *) malloc(((HASH_SIZE * (MAX_INDEXABLE_ARITY + 1)) + 1) * sizeof(char));
 }
 
 static struct HandleList build_handle_list(char *element, char *element_type) {
@@ -212,11 +258,20 @@ static bson_t *build_symbol_bson_document(char *hash, char *name, bool is_litera
     return doc;
 }
 
+static void flush_redis_commands() {
+    for (unsigned int i = 0; i < PENDING_REDIS_COMMANDS; i++) {
+        if (redisGetReply(REDIS, NULL) != REDIS_OK) {
+            printf("REDIS ERROR\n");
+        }
+    }
+    PENDING_REDIS_COMMANDS = 0;
+}
+
 static void flush_symbol_buffer() {
 
-    qsort(SYMBOL_BUFFER, 
-          SYMBOL_BUFFER_CURSOR, 
-          sizeof(struct BufferedSymbol), 
+    qsort(SYMBOL_BUFFER,
+          SYMBOL_BUFFER_CURSOR,
+          sizeof(struct BufferedSymbol),
           symbol_cmp);
 
     unsigned int cursor1 = 1;
@@ -241,6 +296,14 @@ static void flush_symbol_buffer() {
 
     bson_t **bulk_insertion_buffer = (bson_t **) malloc(new_size * sizeof(bson_t *));
     for (unsigned int i = 0; i < new_size; i++) {
+        redisAppendCommand(
+                REDIS,
+                "SET %s:%s %s" ,
+                NAMED_ENTITIES,
+                SYMBOL_BUFFER[i].hash,
+                SYMBOL_BUFFER[i].name);
+        PENDING_REDIS_COMMANDS++;
+
         bulk_insertion_buffer[i] = build_symbol_bson_document(
                 SYMBOL_BUFFER[i].hash,
                 SYMBOL_BUFFER[i].name,
@@ -255,12 +318,15 @@ static void flush_symbol_buffer() {
             MONGODB_INSERT_MANY_OPTIONS,
             NULL,
             &MONGODB_ERROR);
+    flush_redis_commands();
 
     for (unsigned int i = 0; i < new_size; i++) {
         bson_destroy(bulk_insertion_buffer[i]);
     }
     free(bulk_insertion_buffer);
-    if (! DEBUG) print_progress_bar(yylineno, INPUT_LINE_COUNT, PROGRESS_BAR_LENGTH, 1, 1, false);
+#ifndef SUPPRESS_PROGRESS_BAR
+    print_progress_bar(yylineno, INPUT_LINE_COUNT, PROGRESS_BAR_LENGTH, 1, 1, false);
+#endif
 }
 
 static char *add_symbol(char *name, bool is_literal, long value_as_int, double value_as_float) {
@@ -307,6 +373,95 @@ static char *add_typedef(char *child_type, bool child_is_hash, char *parent_type
     return hash;
 }
 
+static void add_redis_pattern(char **composite_key, unsigned int arity, char *value) {
+    char *key = composite_hash(composite_key, arity);
+    redisAppendCommand(REDIS, "%s %s:%s %s", SADD, PATTERNS, key, value);
+    PENDING_REDIS_COMMANDS++;
+    free(key);
+}
+
+static void add_redis_indexes(char *hash, struct HandleList *composite, char *composite_type_hash) {
+
+    // Incomming and outgoing sets
+    sprintf(REDIS_KEY, "%s:%s", OUTGOING_SET, hash);
+    char **argv = (char **) malloc((composite->size + 2) * sizeof(char *));
+    argv[0] = RPUSH;
+    argv[1] = REDIS_KEY;
+    for (unsigned int i = 0; i < composite->size; i++) {
+        argv[i + 2] = composite->elements[i];
+        redisAppendCommand(REDIS, "%s %s:%s %s", SADD, INCOMMING_SET, composite->elements[i], hash);
+        PENDING_REDIS_COMMANDS++;
+    }
+    redisAppendCommandArgv(REDIS, composite->size + 2, (const char **) argv, NULL);
+    free(argv);
+
+    // hash + targets used in temnplates and patterns
+    unsigned int cursor = 0;
+    for (unsigned int j = 0; j < HASH_SIZE; j++) {
+        VALUE_BUFFER[cursor++] = hash[j];
+    }
+    for (unsigned int i = 0; i < composite->size; i++) {
+        for (unsigned int j = 0; j < HASH_SIZE; j++) {
+            VALUE_BUFFER[cursor++] = composite->elements[i][j];
+        }
+    }
+    VALUE_BUFFER[cursor] = '\0';
+
+    // Templates
+    redisAppendCommand(REDIS, "%s %s:%s %s", SADD, TEMPLATES, composite_type_hash, VALUE_BUFFER);
+    PENDING_REDIS_COMMANDS++;
+
+    // Patterns
+    unsigned int arity = composite->size;
+    if (arity > MAX_INDEXABLE_ARITY) {
+        return;
+    }
+    switch (arity) {
+        case 4:
+            for (unsigned int c1 = 0; c1 < arity; c1++) {
+                for (unsigned int c2 = 0; c2 < arity; c2++) {
+                    for (unsigned int c3 = 0; c3 < arity; c3++) {
+                        for (unsigned int i = 0; i < arity; i++) {
+                            if (i == c1 || i == c2 || i == c3) {
+                                KEY_BUFFER[i] = WILDCARD;
+                            } else {
+                                KEY_BUFFER[i] = composite->elements[1];
+                            }
+                        }
+                        add_redis_pattern(KEY_BUFFER, arity, VALUE_BUFFER);
+                    }
+                }
+            }
+            break;
+        case 3:
+            for (unsigned int c1 = 0; c1 < arity; c1++) {
+                for (unsigned int c2 = 0; c2 < arity; c2++) {
+                    for (unsigned int i = 0; i < arity; i++) {
+                        if (i == c1 || i == c2) {
+                            KEY_BUFFER[i] = WILDCARD;
+                        } else {
+                            KEY_BUFFER[i] = composite->elements[1];
+                        }
+                    }
+                    add_redis_pattern(KEY_BUFFER, arity, VALUE_BUFFER);
+                }
+            }
+            break;
+        case 2:
+            for (unsigned int c1 = 0; c1 < arity; c1++) {
+                for (unsigned int i = 0; i < arity; i++) {
+                    if (i == c1) {
+                        KEY_BUFFER[i] = WILDCARD;
+                    } else {
+                        KEY_BUFFER[i] = composite->elements[1];
+                    }
+                }
+               add_redis_pattern(KEY_BUFFER, arity, VALUE_BUFFER);
+            }
+        default:
+    }
+}
+
 static bson_t *build_expression_bson_document(char *hash, bool is_toplevel, struct HandleList *composite) {
     bson_t *doc = bson_new();
     char **composite_type = (char **) malloc((composite->size + 1) * sizeof(char *));
@@ -335,6 +490,7 @@ static bson_t *build_expression_bson_document(char *hash, bool is_toplevel, stru
         sprintf(key_tag, "key_%d", i);
         BSON_APPEND_UTF8(doc, key_tag, composite->elements[i]);
     }
+    add_redis_indexes(hash, composite, composite_type_hash);
     return doc;
 }
 
@@ -374,9 +530,9 @@ static void expression_copy(struct BufferedExpression *e1, struct BufferedExpres
 
 static void flush_expression_buffer() {
 
-    qsort(EXPRESSION_BUFFER, 
-          EXPRESSION_BUFFER_CURSOR, 
-          sizeof(struct BufferedExpression), 
+    qsort(EXPRESSION_BUFFER,
+          EXPRESSION_BUFFER_CURSOR,
+          sizeof(struct BufferedExpression),
           expression_cmp);
 
     unsigned int cursor1 = 1;
@@ -414,12 +570,15 @@ static void flush_expression_buffer() {
             MONGODB_INSERT_MANY_OPTIONS,
             NULL,
             &MONGODB_ERROR);
+    flush_redis_commands();
 
     for (unsigned int i = 0; i < new_size; i++) {
         bson_destroy(bulk_insertion_buffer[i]);
     }
     free(bulk_insertion_buffer);
-    if (! DEBUG) print_progress_bar(yylineno, INPUT_LINE_COUNT, PROGRESS_BAR_LENGTH, 1, 1, false);
+#ifndef SUPPRESS_PROGRESS_BAR
+    print_progress_bar(yylineno, INPUT_LINE_COUNT, PROGRESS_BAR_LENGTH, 1, 1, false);
+#endif
 }
 
 static char *add_expression(bool is_toplevel, struct HandleList composite) {
@@ -439,10 +598,10 @@ static void insert_commom_atoms() {
     free(add_typedef(EXPRESSION, false, TYPE, false));
 }
 
+// =====================================================================
 // Public "action" API
 
 void initialize_actions() {
-    mongodb_setup();
     SYMBOL_HASH = named_type_hash(SYMBOL);
     EXPRESSION_HASH = named_type_hash(EXPRESSION);
     TYPEDEF_MARK_HASH = named_type_hash(TYPEDEF_MARK);
@@ -451,15 +610,24 @@ void initialize_actions() {
     METTA_TYPE_HASH = named_type_hash(METTA_TYPE);
     char *composite_type_typedef[3] = {TYPEDEF_MARK_HASH, TYPE_HASH, TYPE_HASH};
     COMPOSITE_TYPE_TYPEDEF_HASH = composite_hash((char **) composite_type_typedef, 3);
+    redis_setup();
+    mongodb_setup();
     insert_commom_atoms();
-    if (! DEBUG) print_progress_bar(yylineno, INPUT_LINE_COUNT, PROGRESS_BAR_LENGTH, 1, 1, false);
+#ifndef SUPPRESS_PROGRESS_BAR
+    print_progress_bar(yylineno, INPUT_LINE_COUNT, PROGRESS_BAR_LENGTH, 1, 1, false);
+#endif
 }
 
 void finalize_actions() {
     if (EXPRESSION_BUFFER_CURSOR > 0) {
         flush_expression_buffer();
     }
-    if (! DEBUG) print_progress_bar(INPUT_LINE_COUNT, INPUT_LINE_COUNT, PROGRESS_BAR_LENGTH, 1, 1, true);
+    redisFree(REDIS);
+    mongodb_destroy();
+
+#ifndef SUPPRESS_PROGRESS_BAR
+    print_progress_bar(INPUT_LINE_COUNT, INPUT_LINE_COUNT, PROGRESS_BAR_LENGTH, 1, 1, true);
+#endif
 }
 
 void typedef_base(char *handle) {
