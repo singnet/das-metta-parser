@@ -363,7 +363,7 @@ static char *add_typedef(char *child_type, bool child_is_hash, char *parent_type
     bson_t *selector = bson_new();
     bson_t *doc = bson_new();
     char *child_hash = child_is_hash ? child_type : add_symbol(child_type, false, LONG_MIN, DBL_MIN);
-    char *parent_hash = parent_is_hash ? parent_type : add_symbol(child_type, false, LONG_MIN, DBL_MIN);
+    char *parent_hash = parent_is_hash ? parent_type : add_symbol(parent_type, false, LONG_MIN, DBL_MIN);
     char *pair[2] = {child_hash, parent_hash};
     char *hash = expression_hash(TYPEDEF_MARK_HASH, pair, 2);
     BSON_APPEND_UTF8(selector, "_id", hash);
