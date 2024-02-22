@@ -1,18 +1,50 @@
+#include <stdio.h>
 #include "actions.h"
+#include "action_util.h"
 #include "handle_list.h"
 
 extern struct HandleList EMPTY_HANDLE_LIST;
+extern int yylineno;
+extern unsigned long INPUT_LINE_COUNT;
+
+static unsigned int COUNT_TOPLEVEL = 1;
 
 void initialize_actions() {
+#ifndef SUPPRESS_PROGRESS_BAR
+    print_progress_bar(yylineno, INPUT_LINE_COUNT, 1, 1, false);
+#endif
+
 }
 
 void finalize_actions() {
 }
 
-void typedef_base(char *handle) {
+void start() {
+#ifndef SUPPRESS_PROGRESS_BAR
+    print_progress_bar(INPUT_LINE_COUNT, INPUT_LINE_COUNT, 1, 1, true);
+#endif
+    printf("Syntax check OK\n");
 }
 
-void typedef_inherited(char *handle) {
+void toplevel_list_base(char *handle) {
+}
+
+void toplevel_list_recursion(char *handle) {
+    if ((COUNT_TOPLEVEL % 10000) == 0) {
+#ifndef SUPPRESS_PROGRESS_BAR
+        print_progress_bar(yylineno, INPUT_LINE_COUNT, 1, 1, false);
+#endif
+    } else {
+        COUNT_TOPLEVEL++;
+    }
+}
+
+char *typedef_base(char *handle) {
+    return "";
+}
+
+char *typedef_inherited(char *handle) {
+    return "";
 }
 
 char *toplevel_expression(struct HandleList composite) {

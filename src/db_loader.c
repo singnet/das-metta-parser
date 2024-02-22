@@ -106,8 +106,6 @@ static char *COMPOSITE_TYPE_TYPEDEF_HASH = NULL;
     S != ARROW_HASH && \
     S != COMPOSITE_TYPE_TYPEDEF_HASH) free(S);
 
-// Progress bar defaults
-static unsigned int PROGRESS_BAR_LENGTH = 60;
 
 static void mongodb_destroy() {
     mongoc_database_destroy(MONGODB);
@@ -340,7 +338,7 @@ static void flush_symbol_buffer() {
     }
     free(bulk_insertion_buffer);
 #ifndef SUPPRESS_PROGRESS_BAR
-    print_progress_bar(yylineno, INPUT_LINE_COUNT, PROGRESS_BAR_LENGTH, 1, 1, false);
+    print_progress_bar(yylineno, INPUT_LINE_COUNT, 1, 1, false);
 #endif
 }
 
@@ -592,7 +590,7 @@ static void flush_expression_buffer() {
     }
     free(bulk_insertion_buffer);
 #ifndef SUPPRESS_PROGRESS_BAR
-    print_progress_bar(yylineno, INPUT_LINE_COUNT, PROGRESS_BAR_LENGTH, 1, 1, false);
+    print_progress_bar(yylineno, INPUT_LINE_COUNT, 1, 1, false);
 #endif
 }
 
@@ -629,7 +627,7 @@ void initialize_actions() {
     mongodb_setup();
     insert_commom_atoms();
 #ifndef SUPPRESS_PROGRESS_BAR
-    print_progress_bar(yylineno, INPUT_LINE_COUNT, PROGRESS_BAR_LENGTH, 1, 1, false);
+    print_progress_bar(yylineno, INPUT_LINE_COUNT, 1, 1, false);
 #endif
 }
 
@@ -641,16 +639,27 @@ void finalize_actions() {
     mongodb_destroy();
 
 #ifndef SUPPRESS_PROGRESS_BAR
-    print_progress_bar(INPUT_LINE_COUNT, INPUT_LINE_COUNT, PROGRESS_BAR_LENGTH, 1, 1, true);
+    print_progress_bar(INPUT_LINE_COUNT, INPUT_LINE_COUNT, 1, 1, true);
 #endif
 }
 
-void typedef_base(char *handle) {
+void start() {
+}
+
+void toplevel_list_base(char *handle) {
     free(handle);
 }
 
-void typedef_inherited(char *handle) {
+void toplevel_list_recursion(char *handle) {
     free(handle);
+}
+
+char *typedef_base(char *handle) {
+    return handle;
+}
+
+char *typedef_inherited(char *handle) {
+    return handle;
 }
 
 char *symbol_typedef_symbol_type(char *symbol) {
