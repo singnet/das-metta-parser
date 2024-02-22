@@ -4,6 +4,8 @@
 #include "action_util.h"
 #include "limits.h"
 
+#define PROGRESS_BAR_LENGTH ((unsigned int) 60)
+
 extern void yyerror(const char* s);
 
 char *string_copy(char *source) {
@@ -21,15 +23,14 @@ static unsigned int PREVIOUS_FILLED_LENGTH = 0;
 void print_progress_bar(
         unsigned int iteration, 
         unsigned int total, 
-        unsigned int length, 
         unsigned int step, 
         unsigned int max_step,
         bool print_eol) {
 
-    if (total <= length) {
+    if (total <= PROGRESS_BAR_LENGTH) {
         return;
     }
-    unsigned int filled_length = (unsigned int) (((float) iteration / total) * length);
+    unsigned int filled_length = (unsigned int) (((float) iteration / total) * PROGRESS_BAR_LENGTH);
     if (iteration == 1 || filled_length > PREVIOUS_FILLED_LENGTH || iteration >= total) {
         PREVIOUS_FILLED_LENGTH = filled_length;
         if (iteration > total) {
@@ -43,7 +44,7 @@ void print_progress_bar(
         for (unsigned int i = 0; i < filled_length; i++) {
             line[cursor++] = fill;
         }
-        for (unsigned int i = 0; i < length - filled_length; i++) {
+        for (unsigned int i = 0; i < PROGRESS_BAR_LENGTH - filled_length; i++) {
             line[cursor++] = '-';
         }
         line[cursor] = '\0';

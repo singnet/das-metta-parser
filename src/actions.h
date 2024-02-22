@@ -5,8 +5,11 @@
 
 void initialize_actions();
 void finalize_actions();
-void typedef_base(char *handle);
-void typedef_inherited(char *handle);
+void start();
+void toplevel_list_base(char *handle);
+void toplevel_list_recursion(char *handle);
+char *typedef_base(char *handle);
+char *typedef_inherited(char *handle);
 char *toplevel_expression(struct HandleList composite);
 char *base_typedef_function(char *symbol, char *function_handle);
 char *inherited_typedef(char *symbol, char *parent_type);

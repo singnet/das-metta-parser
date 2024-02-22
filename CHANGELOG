@@ -1,3 +1,4 @@
 [#14] Add parser actions for typedef entries
 [#17] Populates Redis indexes in parser actions
 [#19] Add support for cluster Redis
+[#21] Enhance log messages

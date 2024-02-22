@@ -54,20 +54,20 @@ unsigned long INPUT_LINE_COUNT;
 
 %%
 
-start:
-     | toplevel_list
+start:               { printf("Empty file\n"); }
+     | toplevel_list { start();                }
 ;
 
-toplevel_list: toplevel
-             | toplevel_list toplevel
+toplevel_list: toplevel               { toplevel_list_base($1);      }
+             | toplevel_list toplevel { toplevel_list_recursion($2); }
 ;
 
-toplevel: typedef              { typedef_base($1);      }
-         | toplevel_expression { typedef_inherited($1); }
+toplevel: typedef              { $$ = $1; }
+         | toplevel_expression { $$ = $1; }
 ;
 
-typedef: base_typedef      { $$ = $1; }
-       | inherited_typedef { $$ = $1; }
+typedef: base_typedef      { $$ = typedef_base($1);      }
+       | inherited_typedef { $$ = typedef_inherited($1); }
 ;
 
 base_typedef: symbol_typedef                                     { $$ = $1; }
