@@ -3,6 +3,7 @@
 
 struct HandleList {
     unsigned int size;
+    char *expression_type_hash;
     char **elements;
     char **elements_type;
 };

@@ -22,7 +22,10 @@ RUN cd /tmp &&\
     cd build &&\
     cmake -DCMAKE_BUILD_TYPE=RelWithDebInfo -DENABLE_SSL=ON ..&&\
     make &&\
-    make install
+    make install &&\
+    echo "/usr/local/lib" > /etc/ld.so.conf.d/local.conf &&\
+    ldconfig
+
 RUN pip3 install hyperon-das
 ENV C_INCLUDE_PATH=/usr/include/libmongoc-1.0:/usr/include/libbson-1.0
 RUN mkdir /opt/das-metta-parser
