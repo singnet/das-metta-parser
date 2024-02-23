@@ -28,6 +28,7 @@ RUN cd /tmp &&\
 
 RUN pip3 install hyperon-das
 ENV C_INCLUDE_PATH=/usr/include/libmongoc-1.0:/usr/include/libbson-1.0
+RUN mkdir /opt/data
 RUN mkdir /opt/das-metta-parser
 VOLUME /opt/das-metta-parser
 WORKDIR /opt/das-metta-parser
