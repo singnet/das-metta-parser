@@ -63,7 +63,7 @@ char *base_typedef_function(char *symbol, char *function_handle) {
     return "";
 }
 
-struct HandleList type_desc_type(char *type_symbol) {
+struct HandleList type_desc_type() {
     return EMPTY_HANDLE_LIST;
 }
 

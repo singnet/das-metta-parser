@@ -3,3 +3,4 @@
 [#19] Add support for cluster Redis
 [#21] Enhance log messages
 [#23] Add AtomSpace nodes/links for MeTTa type hieararchy
+[das-query-engine/#105] Improve documentation and user experience
