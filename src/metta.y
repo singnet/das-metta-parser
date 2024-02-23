@@ -90,7 +90,7 @@ type_desc_list: type_desc                { $$ = type_desc_list_base($1);        
               | type_desc_list type_desc { $$ = type_desc_list_recursion($1, $2); }
 ;
 
-type_desc: T_TYPE           { $$ = type_desc_type($1);     }
+type_desc: T_TYPE           { $$ = type_desc_type();     }
          | T_SYMBOL         { $$ = type_desc_symbol($1);   }
          | function_typedef { $$ = type_desc_function($1); }
 ;

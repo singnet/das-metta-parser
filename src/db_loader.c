@@ -85,12 +85,16 @@ struct BufferedSymbol SYMBOL_BUFFER[SYMBOL_BUFFER_SIZE];
 // Reusable types and hashes
 static char *SYMBOL = "Symbol";
 static char *SYMBOL_HASH = NULL;
+static char *SYMBOL_SYMBOL = NULL;
 static char *EXPRESSION = "Expression";
 static char *EXPRESSION_HASH = NULL;
+static char *EXPRESSION_SYMBOL = NULL;
 static char *TYPE = "Type";
 static char *TYPE_HASH = NULL;
+static char *TYPE_SYMBOL = NULL;
 static char *METTA_TYPE = "MettaType";
 static char *METTA_TYPE_HASH = NULL;
+static char *METTA_TYPE_SYMBOL = NULL;
 static char *TYPEDEF_MARK = ":";
 static char *TYPEDEF_MARK_HASH = NULL;
 static char *ARROW = "->";
@@ -356,9 +360,35 @@ static char *add_symbol(char *name, bool is_literal, long value_as_int, double v
     return hash;
 }
 
+static void add_link_arity_2(
+        char *link_type_hash, 
+        char *source_hash, 
+        char *source_type_hash, 
+        char *target_hash, 
+        char *target_type_hash) {
+
+    //printf("ADD LINK2 %s <%s (%s) %s (%s)>\n", link_type_hash, source_hash, source_type_hash, target_hash, target_type_hash);
+    struct HandleList composite;
+    composite.size = 2;
+    composite.expression_type_hash = link_type_hash;
+    // These are not memory leaks. These arrays are destroyed when EXPRESSION_BUFFER is proccessed
+    composite.elements = (char **) malloc(2 * (sizeof(char *)));
+    composite.elements_type = (char **) malloc(2 * (sizeof(char *)));
+    composite.elements[0] = source_hash;
+    composite.elements[1] = target_hash;
+    composite.elements_type[0] = source_type_hash;
+    composite.elements_type[1] = target_type_hash;
+    char *hash = expression_hash(link_type_hash, composite.elements, 2);
+    EXPRESSION_BUFFER[EXPRESSION_BUFFER_CURSOR].is_toplevel = false;
+    EXPRESSION_BUFFER[EXPRESSION_BUFFER_CURSOR].composite = composite;
+    // hash is destroyed when EXPRESSION_BUFFER is proccessed
+    EXPRESSION_BUFFER[EXPRESSION_BUFFER_CURSOR].hash = hash;
+    EXPRESSION_BUFFER_CURSOR++;
+}
+
 static char *add_typedef(char *child_type, bool child_is_hash, char *parent_type, bool parent_is_hash) {
 
-    // printf("ADD TYPEDEF %s %s\n", child_type, parent_type);
+    //printf("ADD TYPEDEF %s (%s) %s (%s)\n", child_type, (child_is_hash ? "hash" : "string"), parent_type, (parent_is_hash ? "hash" : "string"));
 
     bson_t *selector = bson_new();
     bson_t *doc = bson_new();
@@ -371,6 +401,7 @@ static char *add_typedef(char *child_type, bool child_is_hash, char *parent_type
     BSON_APPEND_UTF8(doc, "composite_type_hash", COMPOSITE_TYPE_TYPEDEF_HASH);
     BSON_APPEND_UTF8(doc, "named_type", child_type);
     BSON_APPEND_UTF8(doc, "named_type_hash", child_hash);
+    add_link_arity_2(METTA_TYPE_HASH, child_hash, SYMBOL_HASH, parent_hash, SYMBOL_HASH);
     if (! mongoc_collection_replace_one(MONGODB_TYPES, selector, doc, MONGODB_REPLACE_OPTIONS, NULL, &MONGODB_ERROR)) {
         mongodb_error((char *) &MONGODB_ERROR.message);
     } else {
@@ -478,7 +509,7 @@ static void add_redis_indexes(char *hash, struct HandleList *composite, char *co
 static bson_t *build_expression_bson_document(char *hash, bool is_toplevel, struct HandleList *composite) {
     bson_t *doc = bson_new();
     char **composite_type = (char **) malloc((composite->size + 1) * sizeof(char *));
-    composite_type[0] = EXPRESSION_HASH;
+    composite_type[0] = composite->expression_type_hash;
     for (unsigned int i = 0; i < composite->size; i++) {
         composite_type[i + 1] = composite->elements_type[i];
     }
@@ -493,8 +524,8 @@ static bson_t *build_expression_bson_document(char *hash, bool is_toplevel, stru
         sprintf(count, "%d", i);
         BSON_APPEND_UTF8(composite_type_doc, count, composite_type[i]);
     }
-    free(composite_type);
     BSON_APPEND_ARRAY(doc, "composite_type", composite_type_doc);
+    free(composite_type);
     bson_destroy(composite_type_doc);
     BSON_APPEND_UTF8(doc, "named_type", EXPRESSION);
     BSON_APPEND_UTF8(doc, "named_type_hash", EXPRESSION_HASH);
@@ -575,6 +606,7 @@ static void flush_expression_buffer() {
                 EXPRESSION_BUFFER[i].is_toplevel,
                 &(EXPRESSION_BUFFER[i].composite));
     }
+
     mongoc_collection_insert_many(
             // XXX TODO Fix mongodb collections
             MONGODB_LINKS_N,
@@ -596,6 +628,7 @@ static void flush_expression_buffer() {
 
 static char *add_expression(bool is_toplevel, struct HandleList composite) {
     char *hash = expression_hash(EXPRESSION_HASH, composite.elements, composite.size);
+    composite.expression_type_hash = EXPRESSION_HASH;
     EXPRESSION_BUFFER[EXPRESSION_BUFFER_CURSOR].is_toplevel = is_toplevel;
     EXPRESSION_BUFFER[EXPRESSION_BUFFER_CURSOR].composite = composite;
     EXPRESSION_BUFFER[EXPRESSION_BUFFER_CURSOR].hash = string_copy(hash);
@@ -607,8 +640,13 @@ static char *add_expression(bool is_toplevel, struct HandleList composite) {
 }
 
 static void insert_commom_atoms() {
-    free(add_typedef(SYMBOL, false, TYPE, false));
-    free(add_typedef(EXPRESSION, false, TYPE, false));
+    SYMBOL_SYMBOL = add_symbol(SYMBOL, false, LONG_MIN, DBL_MIN);
+    TYPE_SYMBOL = add_symbol(TYPE, false, LONG_MIN, DBL_MIN);
+    EXPRESSION_SYMBOL = add_symbol(EXPRESSION, false, LONG_MIN, DBL_MIN);
+    METTA_TYPE_SYMBOL = add_symbol(METTA_TYPE, false, LONG_MIN, DBL_MIN);
+    add_typedef(SYMBOL_SYMBOL, true, TYPE_SYMBOL, true);
+    add_typedef(EXPRESSION_SYMBOL, true, TYPE_SYMBOL, true);
+    add_typedef(METTA_TYPE_SYMBOL, true, TYPE_SYMBOL, true);
 }
 
 // =====================================================================
@@ -663,7 +701,7 @@ char *typedef_inherited(char *handle) {
 }
 
 char *symbol_typedef_symbol_type(char *symbol) {
-    return add_typedef(symbol, false, TYPE_HASH, true);
+    return add_typedef(symbol, false, TYPE_SYMBOL, true);
 }
 
 char *symbol_typedef_symbol_symbol(char *symbol, char *parent_type) {
@@ -671,7 +709,7 @@ char *symbol_typedef_symbol_symbol(char *symbol, char *parent_type) {
 }
 
 char *symbol_typedef_literal_type(char *literal) {
-    return add_typedef(literal, true, TYPE, true);
+    return add_typedef(literal, true, TYPE_SYMBOL, true);
 }
 
 char *symbol_typedef_literal_symbol(char *literal, char *parent_type) {
@@ -692,8 +730,8 @@ char *function_typedef(struct HandleList composite) {
     return add_function_typedef(composite);
 }
 
-struct HandleList type_desc_type(char *type_symbol) {
-    return build_handle_list(TYPE_HASH, SYMBOL_HASH);
+struct HandleList type_desc_type() {
+    return build_handle_list(TYPE_SYMBOL, SYMBOL_HASH);
 }
 
 struct HandleList type_desc_symbol(char *symbol) {
@@ -701,7 +739,7 @@ struct HandleList type_desc_symbol(char *symbol) {
 }
 
 struct HandleList type_desc_function(char *handle) {
-    // TODO review this
+    // TODO review this: there should be a way to determine function type instead of copying handle
     return build_handle_list(handle, string_copy(handle));
 }
 
