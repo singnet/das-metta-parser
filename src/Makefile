@@ -44,4 +44,4 @@ test_mongo: test_mongo.o
 	gcc -o test_mongo test_mongo.o $(LDFLAGS)
 
 clean:
-	$(RM) metta.tab.c lex.yy.c metta.tab.h metta.output $(ACTION_OBJS) $(UTIL_OBJS)
+	$(RM) metta.tab.c metta.tab.o lex.yy.c lex.yy.o metta.tab.h metta.output $(ACTION_OBJS) $(UTIL_OBJS)
