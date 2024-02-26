@@ -1,4 +1,4 @@
-FROM ubuntu:latest AS builder
+FROM ubuntu:22.04
 
 ENV C_INCLUDE_PATH=/usr/include/libmongoc-1.0:/usr/include/libbson-1.0
 
@@ -7,22 +7,28 @@ RUN apt-get update -y && apt-get install -y \
     bison \
     flex \
     libmongoc-dev \
-    libhiredis-dev\
     git \
     cmake \
     python3-pip \
     libmbedtls14 \
-    libmbedtls-dev
+    libmbedtls-dev \
+    libevent-dev \
+    libssl-dev \
+    pkg-config \
+    cmake-data
 
-RUN \
-    cd /tmp &&\
-    git clone https://github.com/sewenew/redis-plus-plus.git &&\
-    cd redis-plus-plus &&\
+COPY assets/hiredis-cluster.tgz /tmp
+
+RUN cd /tmp &&\
+    tar xzf hiredis-cluster.tgz &&\
+    cd hiredis-cluster &&\
     mkdir build &&\
     cd build &&\
-    cmake .. &&\
+    cmake -DCMAKE_BUILD_TYPE=RelWithDebInfo -DENABLE_SSL=ON ..&&\
     make &&\
-    make install
+    make install &&\
+    echo "/usr/local/lib" > /etc/ld.so.conf.d/local.conf &&\
+    ldconfig
 
 RUN pip3 install hyperon-das
 
@@ -32,12 +38,9 @@ RUN mkdir ../bin
 
 COPY ../src ./
 
-RUN make syntax_check
+RUN make && \
+    cp -r /opt/bin/ /usr/local && \
+    rm -rf /opt/bin/ && \
+    rm -rf /opt/das-metta-parser
 
-FROM ubuntu:latest AS prod
-
-WORKDIR /usr/local/bin
-
-COPY --from=builder /opt/bin/syntax_check .
-
-ENTRYPOINT [ "syntax_check" ]
+WORKDIR /tmp
