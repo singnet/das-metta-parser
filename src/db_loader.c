@@ -36,13 +36,13 @@ static bson_t *MONGODB_INSERT_MANY_OPTIONS = NULL;
 #ifdef DB_LOADER_USE_REDIS_CLUSTER
 #define REDIS_APPEND_COMMAND_MACRO redisClusterAppendCommand
 #define REDIS_APPEND_COMMAND_ARGV_MACRO redisClusterAppendCommandArgv
-#define REDIS_GET_REPLAY_MACRO redisClusterGetReply
+#define REDIS_GET_REPLY_MACRO redisClusterGetReply
 #define REDIS_FREE_MACRO redisClusterFree
 #define REDIS_CONTEXT_MACRO redisClusterContext
 #else
 #define REDIS_APPEND_COMMAND_MACRO redisAppendCommand
 #define REDIS_APPEND_COMMAND_ARGV_MACRO redisAppendCommandArgv
-#define REDIS_GET_REPLAY_MACRO redisGetReply
+#define REDIS_GET_REPLY_MACRO redisGetReply
 #define REDIS_FREE_MACRO redisFree
 #define REDIS_CONTEXT_MACRO redisContext
 #endif
@@ -285,8 +285,10 @@ static bson_t *build_symbol_bson_document(char *hash, char *name, bool is_litera
 
 static void flush_redis_commands() {
     for (unsigned int i = 0; i < PENDING_REDIS_COMMANDS; i++) {
-        if (REDIS_GET_REPLAY_MACRO(REDIS, NULL) != REDIS_OK) {
+        if (REDIS_GET_REPLY_MACRO(REDIS, NULL) != REDIS_OK) {
             printf("REDIS ERROR\n");
+        } else {
+            printf("REDIS OK\n");
         }
     }
     PENDING_REDIS_COMMANDS = 0;
