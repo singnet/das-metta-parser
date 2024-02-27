@@ -36,13 +36,13 @@ static bson_t *MONGODB_INSERT_MANY_OPTIONS = NULL;
 #ifdef DB_LOADER_USE_REDIS_CLUSTER
 #define REDIS_APPEND_COMMAND_MACRO redisClusterAppendCommand
 #define REDIS_APPEND_COMMAND_ARGV_MACRO redisClusterAppendCommandArgv
-#define REDIS_GET_REPLAY_MACRO redisClusterGetReply
+#define REDIS_GET_REPLY_MACRO redisClusterGetReply
 #define REDIS_FREE_MACRO redisClusterFree
 #define REDIS_CONTEXT_MACRO redisClusterContext
 #else
 #define REDIS_APPEND_COMMAND_MACRO redisAppendCommand
 #define REDIS_APPEND_COMMAND_ARGV_MACRO redisAppendCommandArgv
-#define REDIS_GET_REPLAY_MACRO redisGetReply
+#define REDIS_GET_REPLY_MACRO redisGetReply
 #define REDIS_FREE_MACRO redisFree
 #define REDIS_CONTEXT_MACRO redisContext
 #endif
@@ -213,7 +213,7 @@ static struct HandleList build_handle_list(char *element, char *element_type) {
 
 static char *add_function_typedef(struct HandleList composite) {
 
-    // printf("ADD FUNCTION TYPEDEF\n");
+    //printf("ADD FUNCTION TYPEDEF\n");
 
     bson_t *selector = bson_new();
     bson_t *doc = bson_new();
@@ -282,7 +282,7 @@ static bson_t *build_symbol_bson_document(char *hash, char *name, bool is_litera
 
 static void flush_redis_commands() {
     for (unsigned int i = 0; i < PENDING_REDIS_COMMANDS; i++) {
-        if (REDIS_GET_REPLAY_MACRO(REDIS, NULL) != REDIS_OK) {
+        if (REDIS_GET_REPLY_MACRO(REDIS, NULL) != REDIS_OK) {
             printf("REDIS ERROR\n");
         }
     }
@@ -640,13 +640,13 @@ static char *add_expression(bool is_toplevel, struct HandleList composite) {
 }
 
 static void insert_commom_atoms() {
-    SYMBOL_SYMBOL = add_symbol(SYMBOL, false, LONG_MIN, DBL_MIN);
     TYPE_SYMBOL = add_symbol(TYPE, false, LONG_MIN, DBL_MIN);
+    SYMBOL_SYMBOL = add_symbol(SYMBOL, false, LONG_MIN, DBL_MIN);
     EXPRESSION_SYMBOL = add_symbol(EXPRESSION, false, LONG_MIN, DBL_MIN);
     METTA_TYPE_SYMBOL = add_symbol(METTA_TYPE, false, LONG_MIN, DBL_MIN);
-    add_typedef(SYMBOL_SYMBOL, true, TYPE_SYMBOL, true);
-    add_typedef(EXPRESSION_SYMBOL, true, TYPE_SYMBOL, true);
-    add_typedef(METTA_TYPE_SYMBOL, true, TYPE_SYMBOL, true);
+    //add_typedef(SYMBOL_SYMBOL, true, TYPE_SYMBOL, true);
+    //add_typedef(EXPRESSION_SYMBOL, true, TYPE_SYMBOL, true);
+    //add_typedef(METTA_TYPE_SYMBOL, true, TYPE_SYMBOL, true);
 }
 
 // =====================================================================
