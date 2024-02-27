@@ -108,6 +108,9 @@ static char *COMPOSITE_TYPE_TYPEDEF_HASH = NULL;
     S != METTA_TYPE_HASH && \
     S != TYPEDEF_MARK_HASH && \
     S != ARROW_HASH && \
+    S != SYMBOL_SYMBOL && \
+    S != EXPRESSION_SYMBOL && \
+    S != METTA_TYPE_SYMBOL && \
     S != COMPOSITE_TYPE_TYPEDEF_HASH) free(S);
 
 
@@ -213,7 +216,7 @@ static struct HandleList build_handle_list(char *element, char *element_type) {
 
 static char *add_function_typedef(struct HandleList composite) {
 
-    // printf("ADD FUNCTION TYPEDEF\n");
+    //printf("ADD FUNCTION TYPEDEF\n");
 
     bson_t *selector = bson_new();
     bson_t *doc = bson_new();
@@ -644,9 +647,9 @@ static void insert_commom_atoms() {
     TYPE_SYMBOL = add_symbol(TYPE, false, LONG_MIN, DBL_MIN);
     EXPRESSION_SYMBOL = add_symbol(EXPRESSION, false, LONG_MIN, DBL_MIN);
     METTA_TYPE_SYMBOL = add_symbol(METTA_TYPE, false, LONG_MIN, DBL_MIN);
-    add_typedef(SYMBOL_SYMBOL, true, TYPE_SYMBOL, true);
-    add_typedef(EXPRESSION_SYMBOL, true, TYPE_SYMBOL, true);
-    add_typedef(METTA_TYPE_SYMBOL, true, TYPE_SYMBOL, true);
+    //add_typedef(SYMBOL_SYMBOL, true, TYPE_SYMBOL, true);
+    //add_typedef(EXPRESSION_SYMBOL, true, TYPE_SYMBOL, true);
+    //add_typedef(METTA_TYPE_SYMBOL, true, TYPE_SYMBOL, true);
 }
 
 // =====================================================================
