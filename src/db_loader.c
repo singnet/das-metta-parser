@@ -647,9 +647,9 @@ static void insert_commom_atoms() {
     TYPE_SYMBOL = add_symbol(TYPE, false, LONG_MIN, DBL_MIN);
     EXPRESSION_SYMBOL = add_symbol(EXPRESSION, false, LONG_MIN, DBL_MIN);
     METTA_TYPE_SYMBOL = add_symbol(METTA_TYPE, false, LONG_MIN, DBL_MIN);
-    //add_typedef(SYMBOL_SYMBOL, true, TYPE_SYMBOL, true);
-    //add_typedef(EXPRESSION_SYMBOL, true, TYPE_SYMBOL, true);
-    //add_typedef(METTA_TYPE_SYMBOL, true, TYPE_SYMBOL, true);
+    add_typedef(SYMBOL_SYMBOL, true, TYPE_SYMBOL, true);
+    add_typedef(EXPRESSION_SYMBOL, true, TYPE_SYMBOL, true);
+    add_typedef(METTA_TYPE_SYMBOL, true, TYPE_SYMBOL, true);
 }
 
 // =====================================================================
