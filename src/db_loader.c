@@ -108,9 +108,6 @@ static char *COMPOSITE_TYPE_TYPEDEF_HASH = NULL;
     S != METTA_TYPE_HASH && \
     S != TYPEDEF_MARK_HASH && \
     S != ARROW_HASH && \
-    S != SYMBOL_SYMBOL && \
-    S != EXPRESSION_SYMBOL && \
-    S != METTA_TYPE_SYMBOL && \
     S != COMPOSITE_TYPE_TYPEDEF_HASH) free(S);
 
 
@@ -287,8 +284,6 @@ static void flush_redis_commands() {
     for (unsigned int i = 0; i < PENDING_REDIS_COMMANDS; i++) {
         if (REDIS_GET_REPLY_MACRO(REDIS, NULL) != REDIS_OK) {
             printf("REDIS ERROR\n");
-        } else {
-            printf("REDIS OK\n");
         }
     }
     PENDING_REDIS_COMMANDS = 0;
@@ -645,13 +640,13 @@ static char *add_expression(bool is_toplevel, struct HandleList composite) {
 }
 
 static void insert_commom_atoms() {
-    SYMBOL_SYMBOL = add_symbol(SYMBOL, false, LONG_MIN, DBL_MIN);
     TYPE_SYMBOL = add_symbol(TYPE, false, LONG_MIN, DBL_MIN);
+    SYMBOL_SYMBOL = add_symbol(SYMBOL, false, LONG_MIN, DBL_MIN);
     EXPRESSION_SYMBOL = add_symbol(EXPRESSION, false, LONG_MIN, DBL_MIN);
     METTA_TYPE_SYMBOL = add_symbol(METTA_TYPE, false, LONG_MIN, DBL_MIN);
-    add_typedef(SYMBOL_SYMBOL, true, TYPE_SYMBOL, true);
-    add_typedef(EXPRESSION_SYMBOL, true, TYPE_SYMBOL, true);
-    add_typedef(METTA_TYPE_SYMBOL, true, TYPE_SYMBOL, true);
+    //add_typedef(SYMBOL_SYMBOL, true, TYPE_SYMBOL, true);
+    //add_typedef(EXPRESSION_SYMBOL, true, TYPE_SYMBOL, true);
+    //add_typedef(METTA_TYPE_SYMBOL, true, TYPE_SYMBOL, true);
 }
 
 // =====================================================================
