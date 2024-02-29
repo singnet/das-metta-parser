@@ -79,7 +79,6 @@ inherited_typedef: T_LEFTP T_LESSTHANCOLON T_SYMBOL T_SYMBOL T_RIGHTP { $$ = inh
 
 symbol_typedef: T_LEFTP T_COLON T_SYMBOL T_TYPE T_RIGHTP   { $$ = symbol_typedef_symbol_type($3);        }
               | T_LEFTP T_COLON T_SYMBOL T_SYMBOL T_RIGHTP { $$ = symbol_typedef_symbol_symbol($3, $4);  }
-              | T_LEFTP T_COLON literal T_TYPE T_RIGHTP    { $$ = symbol_typedef_literal_type($3);       }
               | T_LEFTP T_COLON literal T_SYMBOL T_RIGHTP  { $$ = symbol_typedef_literal_symbol($3, $4); }
 ;
 

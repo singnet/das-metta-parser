@@ -91,10 +91,6 @@ char *symbol_typedef_symbol_symbol(char *symbol, char *parent_type) {
     return "";
 }
 
-char *symbol_typedef_literal_type(char *literal) {
-    return "";
-}
-
 char *symbol_typedef_literal_symbol(char *literal, char *parent_type) {
     return "";
 }

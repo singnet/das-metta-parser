@@ -14,6 +14,8 @@
 
 #include <unistd.h>
 
+#define DEBUG (0)
+
 extern int yylineno;
 extern unsigned long INPUT_LINE_COUNT;
 
@@ -75,7 +77,7 @@ struct BufferedExpression {
 struct BufferedSymbol {
     bool is_literal;
     long value_as_int;
-    long value_as_float;
+    double value_as_float;
     char *hash;
     char *name;
 };
@@ -150,7 +152,7 @@ static void mongodb_setup() {
     char uri[256];
     sprintf(uri, "mongodb://%s:%s@%s:%s/", user, password, host, port);
 
-    printf("Connecting to MongoDB at %s:%s\n", host, port);
+    fprintf(stdout, "Connecting to MongoDB at %s:%s\n", host, port);
     mongoc_init();
     MONGODB_CLIENT = mongoc_client_new(uri);
     if (!MONGODB_CLIENT) {
@@ -178,7 +180,7 @@ static void redis_setup() {
         fprintf(stderr, "You need to set Redis access info as environment variables\n");
         exit(1);
     }
-    printf("Connecting to Redis at %s:%s\n", host, port);
+    fprintf(stdout, "Connecting to Redis at %s:%s\n", host, port);
 #ifdef DB_LOADER_USE_REDIS_CLUSTER
     char *redis_address = (char *) malloc((strlen(host) + strlen(port) + 2) * sizeof(char));
     sprintf(redis_address, "%s:%s", host, port);
@@ -188,11 +190,11 @@ static void redis_setup() {
     REDIS = redisConnect(host, atoi(port));
 #endif
     if (REDIS == NULL) {
-        printf("Connection error.\n");
+        fprintf(stderr, "Connection error.\n");
         exit(1);
     }
     if (REDIS->err) {
-        printf("Redis error: %s\n", REDIS->errstr);
+        fprintf(stderr, "Redis error: %s\n", REDIS->errstr);
         exit(1);
     }
 
@@ -213,7 +215,7 @@ static struct HandleList build_handle_list(char *element, char *element_type) {
 
 static char *add_function_typedef(struct HandleList composite) {
 
-    //printf("ADD FUNCTION TYPEDEF\n");
+    if (DEBUG) printf("ADD FUNCTION TYPEDEF\n");
 
     bson_t *selector = bson_new();
     bson_t *doc = bson_new();
@@ -246,7 +248,6 @@ static char *add_function_typedef(struct HandleList composite) {
 static void destroy_buffered_symbol(struct BufferedSymbol *symbol) {
     DESTROY_HANDLE(symbol->hash);
     free(symbol->name);
-    symbol->hash = NULL;
 }
 
 static void symbol_copy(struct BufferedSymbol *s1, struct BufferedSymbol *s2) {
@@ -283,7 +284,7 @@ static bson_t *build_symbol_bson_document(char *hash, char *name, bool is_litera
 static void flush_redis_commands() {
     for (unsigned int i = 0; i < PENDING_REDIS_COMMANDS; i++) {
         if (REDIS_GET_REPLY_MACRO(REDIS, NULL) != REDIS_OK) {
-            printf("REDIS ERROR\n");
+            fprintf(stderr, "REDIS ERROR\n");
         }
     }
     PENDING_REDIS_COMMANDS = 0;
@@ -320,7 +321,6 @@ static void flush_symbol_buffer() {
     for (unsigned int i = 0; i < new_size; i++) {
         REDIS_APPEND_COMMAND_MACRO(REDIS, "SET %s:%s %s" , NAMED_ENTITIES, SYMBOL_BUFFER[i].hash, SYMBOL_BUFFER[i].name);
         PENDING_REDIS_COMMANDS++;
-
         bulk_insertion_buffer[i] = build_symbol_bson_document(
                 SYMBOL_BUFFER[i].hash,
                 SYMBOL_BUFFER[i].name,
@@ -328,14 +328,16 @@ static void flush_symbol_buffer() {
                 SYMBOL_BUFFER[i].value_as_int,
                 SYMBOL_BUFFER[i].value_as_float);
     }
-    mongoc_collection_insert_many(
+    bool mongo_ok = mongoc_collection_insert_many(
             MONGODB_NODES,
             (const bson_t **) bulk_insertion_buffer,
             new_size,
             MONGODB_INSERT_MANY_OPTIONS,
             NULL,
             &MONGODB_ERROR);
-    flush_redis_commands();
+    if (DEBUG && ! mongo_ok) {
+        fprintf(stderr, "MONGODB ERROR\n");
+    }
 
     for (unsigned int i = 0; i < new_size; i++) {
         bson_destroy(bulk_insertion_buffer[i]);
@@ -346,73 +348,17 @@ static void flush_symbol_buffer() {
 #endif
 }
 
-static char *add_symbol(char *name, bool is_literal, long value_as_int, double value_as_float) {
+static char *add_symbol(char *name, bool is_literal, long value_as_int, double value_as_float, bool destroy_name) {
     char *hash = terminal_hash(SYMBOL, name);
+    if (DEBUG) printf("ADD SYMBOL %s (%s) %ld %e (symbol hash: %s)\n", name, (is_literal ? "literal" : "non literal"), value_as_int, value_as_float, hash);
     SYMBOL_BUFFER[SYMBOL_BUFFER_CURSOR].is_literal = is_literal;
     SYMBOL_BUFFER[SYMBOL_BUFFER_CURSOR].value_as_int = value_as_int;
     SYMBOL_BUFFER[SYMBOL_BUFFER_CURSOR].value_as_float = value_as_float;
     SYMBOL_BUFFER[SYMBOL_BUFFER_CURSOR].hash = string_copy(hash);
     SYMBOL_BUFFER[SYMBOL_BUFFER_CURSOR].name = string_copy(name);
     SYMBOL_BUFFER_CURSOR++;
-    if (SYMBOL_BUFFER_CURSOR == SYMBOL_BUFFER_SIZE) {
-        flush_symbol_buffer();
-    }
-    return hash;
-}
-
-static void add_link_arity_2(
-        char *link_type_hash, 
-        char *source_hash, 
-        char *source_type_hash, 
-        char *target_hash, 
-        char *target_type_hash) {
-
-    //printf("ADD LINK2 %s <%s (%s) %s (%s)>\n", link_type_hash, source_hash, source_type_hash, target_hash, target_type_hash);
-    struct HandleList composite;
-    composite.size = 2;
-    composite.expression_type_hash = link_type_hash;
-    // These are not memory leaks. These arrays are destroyed when EXPRESSION_BUFFER is proccessed
-    composite.elements = (char **) malloc(2 * (sizeof(char *)));
-    composite.elements_type = (char **) malloc(2 * (sizeof(char *)));
-    composite.elements[0] = source_hash;
-    composite.elements[1] = target_hash;
-    composite.elements_type[0] = source_type_hash;
-    composite.elements_type[1] = target_type_hash;
-    char *hash = expression_hash(link_type_hash, composite.elements, 2);
-    EXPRESSION_BUFFER[EXPRESSION_BUFFER_CURSOR].is_toplevel = false;
-    EXPRESSION_BUFFER[EXPRESSION_BUFFER_CURSOR].composite = composite;
-    // hash is destroyed when EXPRESSION_BUFFER is proccessed
-    EXPRESSION_BUFFER[EXPRESSION_BUFFER_CURSOR].hash = hash;
-    EXPRESSION_BUFFER_CURSOR++;
-}
-
-static char *add_typedef(char *child_type, bool child_is_hash, char *parent_type, bool parent_is_hash) {
-
-    //printf("ADD TYPEDEF %s (%s) %s (%s)\n", child_type, (child_is_hash ? "hash" : "string"), parent_type, (parent_is_hash ? "hash" : "string"));
-
-    bson_t *selector = bson_new();
-    bson_t *doc = bson_new();
-    char *child_hash = child_is_hash ? child_type : add_symbol(child_type, false, LONG_MIN, DBL_MIN);
-    char *parent_hash = parent_is_hash ? parent_type : add_symbol(parent_type, false, LONG_MIN, DBL_MIN);
-    char *pair[2] = {child_hash, parent_hash};
-    char *hash = expression_hash(TYPEDEF_MARK_HASH, pair, 2);
-    BSON_APPEND_UTF8(selector, "_id", hash);
-    BSON_APPEND_UTF8(doc, "_id", hash);
-    BSON_APPEND_UTF8(doc, "composite_type_hash", COMPOSITE_TYPE_TYPEDEF_HASH);
-    BSON_APPEND_UTF8(doc, "named_type", child_type);
-    BSON_APPEND_UTF8(doc, "named_type_hash", child_hash);
-    add_link_arity_2(METTA_TYPE_HASH, child_hash, SYMBOL_HASH, parent_hash, SYMBOL_HASH);
-    if (! mongoc_collection_replace_one(MONGODB_TYPES, selector, doc, MONGODB_REPLACE_OPTIONS, NULL, &MONGODB_ERROR)) {
-        mongodb_error((char *) &MONGODB_ERROR.message);
-    } else {
-        bson_destroy(selector);
-        bson_destroy(doc);
-        if (! child_is_hash) {
-            free(child_hash);
-        }
-        if (! parent_is_hash) {
-            free(parent_hash);
-        }
+    if (destroy_name) {
+        free(name);
     }
     return hash;
 }
@@ -506,7 +452,7 @@ static void add_redis_indexes(char *hash, struct HandleList *composite, char *co
     }
 }
 
-static bson_t *build_expression_bson_document(char *hash, bool is_toplevel, struct HandleList *composite) {
+static bson_t *build_expression_bson_document(char *hash, bool is_toplevel, struct HandleList *composite, char *named_type, char *named_type_hash) {
     bson_t *doc = bson_new();
     char **composite_type = (char **) malloc((composite->size + 1) * sizeof(char *));
     composite_type[0] = composite->expression_type_hash;
@@ -527,8 +473,8 @@ static bson_t *build_expression_bson_document(char *hash, bool is_toplevel, stru
     BSON_APPEND_ARRAY(doc, "composite_type", composite_type_doc);
     free(composite_type);
     bson_destroy(composite_type_doc);
-    BSON_APPEND_UTF8(doc, "named_type", EXPRESSION);
-    BSON_APPEND_UTF8(doc, "named_type_hash", EXPRESSION_HASH);
+    BSON_APPEND_UTF8(doc, "named_type", named_type);
+    BSON_APPEND_UTF8(doc, "named_type_hash", named_type_hash);
     char key_tag[8];
     for (unsigned int i = 0; i < composite->size; i++) {
         sprintf(key_tag, "key_%d", i);
@@ -538,10 +484,94 @@ static bson_t *build_expression_bson_document(char *hash, bool is_toplevel, stru
     return doc;
 }
 
+static void add_link_arity_2(
+        char *link_type, 
+        char *link_type_hash, 
+        char *source_hash, 
+        char *source_type_hash, 
+        char *target_hash, 
+        char *target_type_hash) {
+
+    if (DEBUG) printf("ADD LINK2 %s %s <%s (%s) %s (%s)>\n", link_type, link_type_hash, source_hash, source_type_hash, target_hash, target_type_hash);
+
+    struct HandleList composite;
+    composite.size = 2;
+    composite.expression_type_hash = link_type_hash;
+    // These are not memory leaks. These arrays are destroyed when EXPRESSION_BUFFER is proccessed
+    composite.elements = (char **) malloc(2 * (sizeof(char *)));
+    composite.elements_type = (char **) malloc(2 * (sizeof(char *)));
+    composite.elements[0] = source_hash;
+    composite.elements[1] = target_hash;
+    composite.elements_type[0] = source_type_hash;
+    composite.elements_type[1] = target_type_hash;
+    char *hash = expression_hash(link_type_hash, composite.elements, 2);
+    struct BufferedExpression buffered_expression;
+    buffered_expression.is_toplevel = false;
+    buffered_expression.composite = composite;
+    buffered_expression.hash = hash;
+    bson_t *doc = build_expression_bson_document(
+            buffered_expression.hash,
+            buffered_expression.is_toplevel,
+            &(buffered_expression.composite),
+            link_type,
+            link_type_hash);
+    bool mongodb_ok = mongoc_collection_insert_many(
+            // XXX TODO Fix mongodb collections
+            MONGODB_LINKS_N,
+            (const bson_t **) &doc,
+            1,
+            MONGODB_INSERT_MANY_OPTIONS,
+            NULL,
+            &MONGODB_ERROR);
+    if (DEBUG && ! mongodb_ok) {
+        fprintf(stderr, "MONGODB ERROR\n");
+    }
+
+    bson_destroy(doc);
+    free(composite.elements);
+    free(composite.elements_type);
+    free(hash);
+}
+
+static char *add_typedef(char *child_type, bool child_is_hash, char *parent_type, bool parent_is_hash) {
+
+    if (DEBUG) printf("ADD TYPEDEF %s (%s) %s (%s)\n", child_type, (child_is_hash ? "hash" : "string"), parent_type, (parent_is_hash ? "hash" : "string"));
+
+    bson_t *selector = bson_new();
+    bson_t *doc = bson_new();
+    char *child_hash = child_is_hash ? child_type : add_symbol(child_type, false, LONG_MIN, DBL_MIN, false);
+    char *parent_hash = parent_is_hash ? parent_type : add_symbol(parent_type, false, LONG_MIN, DBL_MIN, false);
+    char *pair[2] = {child_hash, parent_hash};
+    char *hash = expression_hash(TYPEDEF_MARK_HASH, pair, 2);
+    if (DEBUG) printf("\t_id: %s\n\tcomposite_type_hash: %s\n\tnamed_type: %s\n\tnamed_type_hash: %s\n", hash, COMPOSITE_TYPE_TYPEDEF_HASH, child_type, child_hash);
+    BSON_APPEND_UTF8(selector, "_id", hash);
+    BSON_APPEND_UTF8(doc, "_id", hash);
+    BSON_APPEND_UTF8(doc, "composite_type_hash", COMPOSITE_TYPE_TYPEDEF_HASH);
+    BSON_APPEND_UTF8(doc, "named_type", child_type);
+    BSON_APPEND_UTF8(doc, "named_type_hash", child_hash);
+    add_link_arity_2(METTA_TYPE, METTA_TYPE_HASH, child_hash, SYMBOL_HASH, parent_hash, SYMBOL_HASH);
+    if (! mongoc_collection_replace_one(MONGODB_TYPES, selector, doc, MONGODB_REPLACE_OPTIONS, NULL, &MONGODB_ERROR)) {
+        mongodb_error((char *) &MONGODB_ERROR.message);
+    } else {
+        bson_destroy(selector);
+        bson_destroy(doc);
+        if (! child_is_hash) {
+            free(child_hash);
+            free(child_type);
+        }
+        if (! parent_is_hash) {
+            free(parent_hash);
+            free(parent_type);
+        }
+    }
+    return hash;
+}
+
 static void destroy_handle_list(struct HandleList *handle_list) {
     for (unsigned int i = 0; i < handle_list->size; i++) {
         DESTROY_HANDLE(handle_list->elements[i]);
-        DESTROY_HANDLE(handle_list->elements_type[i]);
+        // This is not a memory leak. types are always constant strings
+        //DESTROY_HANDLE(handle_list->elements_type[i]);
     }
     free(handle_list->elements);
     free(handle_list->elements_type);
@@ -550,7 +580,6 @@ static void destroy_handle_list(struct HandleList *handle_list) {
 static void destroy_buffered_expression(struct BufferedExpression *expression) {
     DESTROY_HANDLE(expression->hash);
     destroy_handle_list(&(expression->composite));
-    expression->hash = NULL;
 }
 
 static int expression_cmp(const void *e1, const void *e2) {
@@ -568,7 +597,7 @@ static void expression_copy(struct BufferedExpression *e1, struct BufferedExpres
     e1->composite.elements_type = (char **) malloc(e1->composite.size * sizeof(char *));
     for (unsigned int i = 0; i < e1->composite.size; i++) {
         e1->composite.elements[i] = string_copy(e2->composite.elements[i]);
-        e1->composite.elements_type[i] = string_copy(e2->composite.elements_type[i]);
+        e1->composite.elements_type[i] = e2->composite.elements_type[i];
     }
 }
 
@@ -604,10 +633,12 @@ static void flush_expression_buffer() {
         bulk_insertion_buffer[i] = build_expression_bson_document(
                 EXPRESSION_BUFFER[i].hash,
                 EXPRESSION_BUFFER[i].is_toplevel,
-                &(EXPRESSION_BUFFER[i].composite));
+                &(EXPRESSION_BUFFER[i].composite),
+                EXPRESSION,
+                EXPRESSION_HASH);
     }
 
-    mongoc_collection_insert_many(
+    bool mongodb_ok = mongoc_collection_insert_many(
             // XXX TODO Fix mongodb collections
             MONGODB_LINKS_N,
             (const bson_t **) bulk_insertion_buffer,
@@ -615,7 +646,9 @@ static void flush_expression_buffer() {
             MONGODB_INSERT_MANY_OPTIONS,
             NULL,
             &MONGODB_ERROR);
-    flush_redis_commands();
+    if (DEBUG && ! mongodb_ok) {
+        fprintf(stderr, "MONGODB ERROR\n");
+    }
 
     for (unsigned int i = 0; i < new_size; i++) {
         bson_destroy(bulk_insertion_buffer[i]);
@@ -627,23 +660,28 @@ static void flush_expression_buffer() {
 }
 
 static char *add_expression(bool is_toplevel, struct HandleList composite) {
+
+    if (DEBUG) printf("ADD EXPRESSION arity: %d (%s)\n", composite.size, (is_toplevel ? "toplevel" : "non toplevel"));
+
     char *hash = expression_hash(EXPRESSION_HASH, composite.elements, composite.size);
     composite.expression_type_hash = EXPRESSION_HASH;
     EXPRESSION_BUFFER[EXPRESSION_BUFFER_CURSOR].is_toplevel = is_toplevel;
     EXPRESSION_BUFFER[EXPRESSION_BUFFER_CURSOR].composite = composite;
     EXPRESSION_BUFFER[EXPRESSION_BUFFER_CURSOR].hash = string_copy(hash);
     EXPRESSION_BUFFER_CURSOR++;
-    if (EXPRESSION_BUFFER_CURSOR == EXPRESSION_BUFFER_SIZE) {
+    if (EXPRESSION_BUFFER_CURSOR == EXPRESSION_BUFFER_SIZE || SYMBOL_BUFFER_CURSOR == SYMBOL_BUFFER_SIZE) {
         flush_expression_buffer();
+        flush_symbol_buffer();
+        flush_redis_commands();
     }
     return hash;
 }
 
 static void insert_commom_atoms() {
-    TYPE_SYMBOL = add_symbol(TYPE, false, LONG_MIN, DBL_MIN);
-    SYMBOL_SYMBOL = add_symbol(SYMBOL, false, LONG_MIN, DBL_MIN);
-    EXPRESSION_SYMBOL = add_symbol(EXPRESSION, false, LONG_MIN, DBL_MIN);
-    METTA_TYPE_SYMBOL = add_symbol(METTA_TYPE, false, LONG_MIN, DBL_MIN);
+    TYPE_SYMBOL = add_symbol(TYPE, false, LONG_MIN, DBL_MIN, false);
+    SYMBOL_SYMBOL = add_symbol(SYMBOL, false, LONG_MIN, DBL_MIN, false);
+    EXPRESSION_SYMBOL = add_symbol(EXPRESSION, false, LONG_MIN, DBL_MIN, false);
+    METTA_TYPE_SYMBOL = add_symbol(METTA_TYPE, false, LONG_MIN, DBL_MIN, false);
     //add_typedef(SYMBOL_SYMBOL, true, TYPE_SYMBOL, true);
     //add_typedef(EXPRESSION_SYMBOL, true, TYPE_SYMBOL, true);
     //add_typedef(METTA_TYPE_SYMBOL, true, TYPE_SYMBOL, true);
@@ -672,6 +710,12 @@ void initialize_actions() {
 void finalize_actions() {
     if (EXPRESSION_BUFFER_CURSOR > 0) {
         flush_expression_buffer();
+    }
+    if (SYMBOL_BUFFER_CURSOR > 0) {
+        flush_symbol_buffer();
+    }
+    if (PENDING_REDIS_COMMANDS > 0) {
+        flush_redis_commands();
     }
     REDIS_FREE_MACRO(REDIS);
     mongodb_destroy();
@@ -708,10 +752,6 @@ char *symbol_typedef_symbol_symbol(char *symbol, char *parent_type) {
     return add_typedef(symbol, false, parent_type, false);
 }
 
-char *symbol_typedef_literal_type(char *literal) {
-    return add_typedef(literal, true, TYPE_SYMBOL, true);
-}
-
 char *symbol_typedef_literal_symbol(char *literal, char *parent_type) {
     return add_typedef(literal, true, parent_type, false);
 }
@@ -735,7 +775,7 @@ struct HandleList type_desc_type() {
 }
 
 struct HandleList type_desc_symbol(char *symbol) {
-    return build_handle_list(add_symbol(symbol, false, LONG_MIN, DBL_MIN), SYMBOL_HASH);
+    return build_handle_list(add_symbol(symbol, false, LONG_MIN, DBL_MIN, true), SYMBOL_HASH);
 }
 
 struct HandleList type_desc_function(char *handle) {
@@ -776,7 +816,7 @@ struct HandleList type_desc_list_recursion(struct HandleList list, struct Handle
 }
 
 struct HandleList expression_symbol(char *symbol) {
-    return build_handle_list(add_symbol(symbol, false, LONG_MIN, DBL_MIN), SYMBOL_HASH);
+    return build_handle_list(add_symbol(symbol, false, LONG_MIN, DBL_MIN, true), SYMBOL_HASH);
 }
 
 struct HandleList expression_literal(char *literal) {
@@ -788,17 +828,17 @@ struct HandleList expression_composite(struct HandleList composite) {
 }
 
 char *literal_string(char *literal) {
-    return add_symbol(literal, true, LONG_MIN, DBL_MIN);
+    return add_symbol(literal, true, LONG_MIN, DBL_MIN, true);
 }
 
 char *literal_int(long literal) {
     char name[64];
     sprintf(name, "%ld", literal);
-    return add_symbol(name, true, literal, DBL_MIN);
+    return add_symbol(name, true, literal, DBL_MIN, false);
 }
 
 char *literal_float(double literal) {
     char name[64];
     sprintf(name, "%g", literal);
-    return add_symbol(name, true, LONG_MIN, literal);
+    return add_symbol(name, true, LONG_MIN, literal, false);
 }
