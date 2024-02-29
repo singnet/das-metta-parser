@@ -4,3 +4,4 @@
 [#21] Enhance log messages
 [#23] Add AtomSpace nodes/links for MeTTa type hieararchy
 [das-query-engine/#105] Improve documentation and user experience
+[#28 HOTFIX] Fix segfault when loading from inside DAS TK
