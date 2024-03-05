@@ -49,18 +49,15 @@ static bson_t *MONGODB_INSERT_MANY_OPTIONS = NULL;
 #define REDIS_CONTEXT_MACRO redisContext
 #endif
 static REDIS_CONTEXT_MACRO *REDIS = NULL;
-static char REDIS_KEY[MAX_REDIS_KEY_SIZE];
 static unsigned int HASH_SIZE = 0;
 static unsigned int MAX_INDEXABLE_ARITY = 4;
 static unsigned int PENDING_REDIS_COMMANDS = 0;
 static char WILDCARD[] = "*";
 static char **KEY_BUFFER = NULL;
 static char *VALUE_BUFFER = NULL;
-static char RPUSH[] = "RPUSH";
-static char SADD[] = "SADD";
 static char NAMED_ENTITIES[] = "names";
 static char OUTGOING_SET[] = "outgoing_set";
-static char INCOMMING_SET[] = "incomming_set";
+static char INCOMING_SET[] = "incoming_set";
 static char TEMPLATES[] = "templates";
 static char PATTERNS[] = "patterns";
 
@@ -364,29 +361,33 @@ static char *add_symbol(char *name, bool is_literal, long value_as_int, double v
 }
 
 static void add_redis_pattern(char **composite_key, unsigned int arity, char *value) {
-    char *key = composite_hash(composite_key, arity);
-    REDIS_APPEND_COMMAND_MACRO(REDIS, "%s %s:%s %s", SADD, PATTERNS, key, value);
+    char *key = expression_hash(EXPRESSION_HASH, composite_key, arity);
+    // printf("\tADD PATTERN: %s <%s>\n", key, value);
+    // if (arity == 3) {
+    //     printf("\tXXX %s %s %s\n", composite_key[0], composite_key[1], composite_key[2]);
+    // }
+    REDIS_APPEND_COMMAND_MACRO(REDIS, "SADD %s:%s %s", PATTERNS, key, value);
     PENDING_REDIS_COMMANDS++;
     free(key);
 }
 
 static void add_redis_indexes(char *hash, struct HandleList *composite, char *composite_type_hash) {
 
-    // Incomming and outgoing sets
-    sprintf(REDIS_KEY, "%s:%s", OUTGOING_SET, hash);
-    char **argv = (char **) malloc((composite->size + 2) * sizeof(char *));
-    argv[0] = RPUSH;
-    argv[1] = REDIS_KEY;
+    // Incoming and outgoing sets
+    unsigned int cursor = 0;
     for (unsigned int i = 0; i < composite->size; i++) {
-        argv[i + 2] = composite->elements[i];
-        REDIS_APPEND_COMMAND_MACRO(REDIS, "%s %s:%s %s", SADD, INCOMMING_SET, composite->elements[i], hash);
+        for (unsigned int j = 0; j < HASH_SIZE; j++) {
+            VALUE_BUFFER[cursor++] = composite->elements[i][j];
+        }
+        REDIS_APPEND_COMMAND_MACRO(REDIS, "SADD %s:%s %s", INCOMING_SET, composite->elements[i], hash);
         PENDING_REDIS_COMMANDS++;
     }
-    REDIS_APPEND_COMMAND_ARGV_MACRO(REDIS, composite->size + 2, (const char **) argv, NULL);
-    free(argv);
+    VALUE_BUFFER[cursor] = '\0';
+    REDIS_APPEND_COMMAND_MACRO(REDIS, "SET %s:%s %s", OUTGOING_SET, hash, VALUE_BUFFER);
+    PENDING_REDIS_COMMANDS++;
 
-    // hash + targets used in temnplates and patterns
-    unsigned int cursor = 0;
+    // hash + targets used in templates and patterns
+    cursor = 0;
     for (unsigned int j = 0; j < HASH_SIZE; j++) {
         VALUE_BUFFER[cursor++] = hash[j];
     }
@@ -398,7 +399,7 @@ static void add_redis_indexes(char *hash, struct HandleList *composite, char *co
     VALUE_BUFFER[cursor] = '\0';
 
     // Templates
-    REDIS_APPEND_COMMAND_MACRO(REDIS, "%s %s:%s %s", SADD, TEMPLATES, composite_type_hash, VALUE_BUFFER);
+    REDIS_APPEND_COMMAND_MACRO(REDIS, "SADD %s:%s %s", TEMPLATES, composite_type_hash, VALUE_BUFFER);
     PENDING_REDIS_COMMANDS++;
 
     // Patterns
@@ -415,7 +416,7 @@ static void add_redis_indexes(char *hash, struct HandleList *composite, char *co
                             if (i == c1 || i == c2 || i == c3) {
                                 KEY_BUFFER[i] = WILDCARD;
                             } else {
-                                KEY_BUFFER[i] = composite->elements[1];
+                                KEY_BUFFER[i] = composite->elements[i];
                             }
                         }
                         add_redis_pattern(KEY_BUFFER, arity, VALUE_BUFFER);
@@ -430,7 +431,7 @@ static void add_redis_indexes(char *hash, struct HandleList *composite, char *co
                         if (i == c1 || i == c2) {
                             KEY_BUFFER[i] = WILDCARD;
                         } else {
-                            KEY_BUFFER[i] = composite->elements[1];
+                            KEY_BUFFER[i] = composite->elements[i];
                         }
                     }
                     add_redis_pattern(KEY_BUFFER, arity, VALUE_BUFFER);
@@ -443,7 +444,7 @@ static void add_redis_indexes(char *hash, struct HandleList *composite, char *co
                     if (i == c1) {
                         KEY_BUFFER[i] = WILDCARD;
                     } else {
-                        KEY_BUFFER[i] = composite->elements[1];
+                        KEY_BUFFER[i] = composite->elements[i];
                     }
                 }
                add_redis_pattern(KEY_BUFFER, arity, VALUE_BUFFER);
