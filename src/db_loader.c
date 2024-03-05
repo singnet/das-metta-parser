@@ -361,7 +361,11 @@ static char *add_symbol(char *name, bool is_literal, long value_as_int, double v
 }
 
 static void add_redis_pattern(char **composite_key, unsigned int arity, char *value) {
-    char *key = composite_hash(composite_key, arity);
+    char *key = expression_hash(EXPRESSION_HASH, composite_key, arity);
+    // printf("\tADD PATTERN: %s <%s>\n", key, value);
+    // if (arity == 3) {
+    //     printf("\tXXX %s %s %s\n", composite_key[0], composite_key[1], composite_key[2]);
+    // }
     REDIS_APPEND_COMMAND_MACRO(REDIS, "SADD %s:%s %s", PATTERNS, key, value);
     PENDING_REDIS_COMMANDS++;
     free(key);
@@ -412,7 +416,7 @@ static void add_redis_indexes(char *hash, struct HandleList *composite, char *co
                             if (i == c1 || i == c2 || i == c3) {
                                 KEY_BUFFER[i] = WILDCARD;
                             } else {
-                                KEY_BUFFER[i] = composite->elements[1];
+                                KEY_BUFFER[i] = composite->elements[i];
                             }
                         }
                         add_redis_pattern(KEY_BUFFER, arity, VALUE_BUFFER);
@@ -427,7 +431,7 @@ static void add_redis_indexes(char *hash, struct HandleList *composite, char *co
                         if (i == c1 || i == c2) {
                             KEY_BUFFER[i] = WILDCARD;
                         } else {
-                            KEY_BUFFER[i] = composite->elements[1];
+                            KEY_BUFFER[i] = composite->elements[i];
                         }
                     }
                     add_redis_pattern(KEY_BUFFER, arity, VALUE_BUFFER);
@@ -440,7 +444,7 @@ static void add_redis_indexes(char *hash, struct HandleList *composite, char *co
                     if (i == c1) {
                         KEY_BUFFER[i] = WILDCARD;
                     } else {
-                        KEY_BUFFER[i] = composite->elements[1];
+                        KEY_BUFFER[i] = composite->elements[i];
                     }
                 }
                add_redis_pattern(KEY_BUFFER, arity, VALUE_BUFFER);
