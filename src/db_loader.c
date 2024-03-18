@@ -362,7 +362,7 @@ static char *add_symbol(char *name, bool is_literal, long value_as_int, double v
 
 static void add_redis_pattern(char **composite_key, unsigned int arity, char *value) {
     char *key = expression_hash(EXPRESSION_HASH, composite_key, arity);
-    // printf("\tADD PATTERN: %s <%s>\n", key, value);
+    //printf("\tADD PATTERN: %s <%s>\n", key, value);
     // if (arity == 3) {
     //     printf("\tXXX %s %s %s\n", composite_key[0], composite_key[1], composite_key[2]);
     // }
@@ -399,6 +399,7 @@ static void add_redis_indexes(char *hash, struct HandleList *composite, char *co
     VALUE_BUFFER[cursor] = '\0';
 
     // Templates
+    //printf("\tADD TEMPLATE: %s <%s>\n", composite_type_hash, VALUE_BUFFER);
     REDIS_APPEND_COMMAND_MACRO(REDIS, "SADD %s:%s %s", TEMPLATES, composite_type_hash, VALUE_BUFFER);
     PENDING_REDIS_COMMANDS++;
 
@@ -463,7 +464,6 @@ static bson_t *build_expression_bson_document(char *hash, bool is_toplevel, stru
     BSON_APPEND_UTF8(doc, "_id", hash);
     char *composite_type_hash = composite_hash(composite_type, composite->size + 1);
     BSON_APPEND_UTF8(doc, "composite_type_hash", composite_type_hash);
-    free(composite_type_hash);
     BSON_APPEND_BOOL(doc, "is_toplevel", is_toplevel);
     bson_t *composite_type_doc = bson_new();
     char count[8];
@@ -482,6 +482,7 @@ static bson_t *build_expression_bson_document(char *hash, bool is_toplevel, stru
         BSON_APPEND_UTF8(doc, key_tag, composite->elements[i]);
     }
     add_redis_indexes(hash, composite, composite_type_hash);
+    free(composite_type_hash);
     return doc;
 }
 
