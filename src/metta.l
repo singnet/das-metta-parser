@@ -15,10 +15,10 @@
 %%
 
 [[:space:]] ;
-";".*\n {
+[;].*\n {
     if (DEBUG) { fprintf(stdout, "COMMENT %s\n", yytext); }
 }
-"#".*\n {
+[#].*\n {
     if (DEBUG) { fprintf(stdout, "COMMENT %s\n", yytext); }
 }
 [0-9]+\.[0-9]+ {
@@ -55,12 +55,12 @@
     if (DEBUG) { fprintf(stdout, "T_TYPE\n"); }
     return T_TYPE;
 }
-[^[:space:]:()<>"]+ {
+([^[:space:]:()<>"]|\\(.|\n))+ {
     yylval.sval = strdup(yytext); 
     if (DEBUG) { fprintf(stdout, "T_SYMBOL <%s>\n", yytext); }
     return T_SYMBOL;
 }
-["]([^"])*["] {
+["]([^"\n\\]|\\(.|\n))*["] {
     yylval.sval = strdup(yytext); 
     if (DEBUG) { fprintf(stdout, "T_QUOTED_STR <%s>\n", yytext); }
     return T_QUOTED_STR;
