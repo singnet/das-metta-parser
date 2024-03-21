@@ -1,7 +1,7 @@
 all: syntax_check db_loader db_loader_redis_cluster
 
 metta.tab.c metta.tab.h: metta.y actions.h
-	bison -t -v -d metta.y
+	bison -t -v -d -Wcounterexamples metta.y
 
 lex.yy.c: metta.l metta.tab.h
 	flex metta.l
