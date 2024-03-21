@@ -104,6 +104,7 @@ expression_list: expression                 { $$ = expression_list_base($1);    
 expression: T_SYMBOL                         { $$ = expression_symbol($1);    }
           | literal                          { $$ = expression_literal($1);   }
           | T_LEFTP expression_list T_RIGHTP { $$ = expression_composite($2); }
+          | T_LEFTP T_RIGHTP { $$ = expression_empty(); }
 ;
 
 literal: T_QUOTED_STR { $$ = literal_string($1); }
