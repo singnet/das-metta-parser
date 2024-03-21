@@ -739,28 +739,20 @@ void toplevel_list_recursion(char *handle) {
     free(handle);
 }
 
-char *atom_typedef_symbol_type(char *symbol) {
-    return add_typedef(symbol, false, TYPE_SYMBOL, true);
+char *atom_typedef_atom_type(struct HandleList atom_handle_list) {
+    char *atom = add_expression(false, atom_handle_list);
+    return add_typedef(atom, true, TYPE_SYMBOL, true);
 }
 
-char *atom_typedef_symbol_symbol(char *symbol, char *parent_type) {
-    return add_typedef(symbol, false, parent_type, false);
+char *atom_typedef_atom_atom(struct HandleList atom_handle_list, struct HandleList parent_handle_list) {
+    char *atom = add_expression(false, atom_handle_list);
+    char *parent = add_expression(false, parent_handle_list);
+    return add_typedef(atom, true, parent, true);
 }
 
-char *atom_typedef_literal_symbol(char *literal, char *parent_type) {
-    return add_typedef(literal, true, parent_type, false);
-}
-
-char *atom_typedef_symbol_literal(char *symbol, char *parent_type) {
-    return add_typedef(symbol, false, parent_type, true);
-}
-
-char *atom_typedef_literal_literal(char *literal, char *parent_type) {
-    return add_typedef(literal, true, parent_type, true);
-}
-
-char *typedef_function(char *symbol, char *function_handle) {
-    char *answer = add_typedef(symbol, false, function_handle, true);
+char *typedef_function(struct HandleList atom_handle_list, char *function_handle) {
+    char *atom = add_expression(false, atom_handle_list);
+    char *answer = add_typedef(atom, true, function_handle, true);
     free(function_handle);
     return answer;
 }

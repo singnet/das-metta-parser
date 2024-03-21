@@ -15,7 +15,7 @@
 (: 0.5 t1)
 (: "t1" 0.5)
 (: t1 3)
+(: t1 (exp blah))
 (: "t1" (exp blah))
 (: NilGeis (Person (FirstName Nil) (LastName Geis)))
-(: t1 (exp blah))
 (: (exp blah) t1)

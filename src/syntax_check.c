@@ -47,7 +47,7 @@ char *function_typedef(struct HandleList composite) {
     return "";
 }
 
-char *typedef_function(char *symbol, char *function_handle) {
+char *typedef_function(struct HandleList atom_handle_list, char *function_handle) {
     return "";
 }
 
@@ -71,23 +71,11 @@ struct HandleList type_desc_list_recursion(struct HandleList list, struct Handle
     return EMPTY_HANDLE_LIST;
 }
 
-char *atom_typedef_symbol_type(char *symbol) {
+char *atom_typedef_atom_type(struct HandleList atom_handle_list) {
     return "";
 }
 
-char *atom_typedef_symbol_symbol(char *symbol, char *parent_type) {
-    return "";
-}
-
-char *atom_typedef_literal_symbol(char *literal, char *parent_type) {
-    return "";
-}
-
-char *atom_typedef_symbol_literal(char *symbol, char *parent_type) {
-    return "";
-}
-
-char *atom_typedef_literal_literal(char *literal, char *parent_type) {
+char *atom_typedef_atom_atom(struct HandleList atom_handle_list, struct HandleList parent_handle_list) {
     return "";
 }
 

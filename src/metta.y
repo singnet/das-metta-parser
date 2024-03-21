@@ -40,8 +40,6 @@ unsigned long INPUT_LINE_COUNT;
 %type<eval> expression_list
 
 %type<sval> typedef
-%type<sval> inherited_typedef
-%type<sval> base_typedef
 %type<sval> atom_typedef
 %type<sval> function_typedef
 %type<sval> toplevel
@@ -66,18 +64,12 @@ toplevel: typedef             { $$ = $1; }
         | toplevel_expression { $$ = $1; }
 ;
 
-typedef: atom_typedef                                     { $$ = $1; }
-       | T_LEFTP T_COLON T_SYMBOL function_typedef T_RIGHTP { $$ = typedef_function($3, $4); }
+typedef: atom_typedef                                         { $$ = $1; }
+       | T_LEFTP T_COLON expression function_typedef T_RIGHTP { $$ = typedef_function($3, $4); }
 ;
 
-inherited_typedef: T_LEFTP T_LESSTHANCOLON T_SYMBOL T_SYMBOL T_RIGHTP { $$ = inherited_typedef($3, $4); }
-;
-
-atom_typedef: T_LEFTP T_COLON T_SYMBOL T_TYPE T_RIGHTP   { $$ = atom_typedef_symbol_type($3);         }
-            | T_LEFTP T_COLON T_SYMBOL T_SYMBOL T_RIGHTP { $$ = atom_typedef_symbol_symbol($3, $4);   }
-            | T_LEFTP T_COLON literal T_SYMBOL T_RIGHTP  { $$ = atom_typedef_literal_symbol($3, $4);  }
-            | T_LEFTP T_COLON T_SYMBOL literal T_RIGHTP  { $$ = atom_typedef_symbol_literal($3, $4);  }
-            | T_LEFTP T_COLON literal literal T_RIGHTP   { $$ = atom_typedef_literal_literal($3, $4); }
+atom_typedef: T_LEFTP T_COLON expression T_TYPE T_RIGHTP     { $$ = atom_typedef_atom_type($3);     }
+            | T_LEFTP T_COLON expression expression T_RIGHTP { $$ = atom_typedef_atom_atom($3, $4); }
 ;
 
 function_typedef: T_LEFTP T_ARROW type_desc_list T_RIGHTP { $$ = function_typedef($3); }
