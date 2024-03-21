@@ -115,6 +115,10 @@ struct HandleList expression_composite(struct HandleList composite) {
     return EMPTY_HANDLE_LIST;
 }
 
+struct HandleList expression_empty(struct HandleList composite) {
+    return EMPTY_HANDLE_LIST;
+}
+
 char *literal_string(char *literal) {
     return "";
 }

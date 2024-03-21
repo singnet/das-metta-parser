@@ -5,3 +5,6 @@
 (Similarity "\#monkey" "chimp" )
 # comment3 ()
 ;; comment4
+(Inheritance (god) ())
+(Similarity god "")
+(Inheritance (god) (() ()))

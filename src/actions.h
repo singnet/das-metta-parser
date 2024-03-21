@@ -27,6 +27,7 @@ struct HandleList expression_list_recursion(struct HandleList list, struct Handl
 struct HandleList expression_symbol(char *symbol);
 struct HandleList expression_literal(char *literal);
 struct HandleList expression_composite(struct HandleList composite);
+struct HandleList expression_empty();
 char *literal_string(char *literal);
 char *literal_int(long literal);
 char *literal_float(double literal);

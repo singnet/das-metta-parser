@@ -18,6 +18,7 @@
 
 extern int yylineno;
 extern unsigned long INPUT_LINE_COUNT;
+extern struct HandleList EMPTY_HANDLE_LIST;
 
 // Private stuff
 
@@ -827,6 +828,10 @@ struct HandleList expression_literal(char *literal) {
 
 struct HandleList expression_composite(struct HandleList composite) {
     return build_handle_list(add_expression(false, composite), EXPRESSION_HASH);
+}
+
+struct HandleList expression_empty() {
+    return build_handle_list(add_expression(false, EMPTY_HANDLE_LIST), EXPRESSION_HASH);
 }
 
 char *literal_string(char *literal) {
