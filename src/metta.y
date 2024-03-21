@@ -30,8 +30,9 @@ unsigned long INPUT_LINE_COUNT;
 %token<ival> T_INT
 %token<fval> T_FLOAT
 %token<sval> T_SYMBOL T_TYPE T_QUOTED_STR
+%token<sval> T_COLON
+%token T_ARROW
 %token T_LEFTP T_RIGHTP
-%token T_COLON T_LESSTHANCOLON T_ARROW
 %token T_NEWLINE
 
 %type<eval> type_desc
@@ -65,11 +66,11 @@ toplevel: typedef             { $$ = $1; }
 ;
 
 typedef: atom_typedef                                         { $$ = $1; }
-       | T_LEFTP T_COLON expression function_typedef T_RIGHTP { $$ = typedef_function($3, $4); }
+       | T_LEFTP T_COLON expression function_typedef T_RIGHTP { $$ = typedef_function($2, $3, $4); }
 ;
 
-atom_typedef: T_LEFTP T_COLON expression T_TYPE T_RIGHTP     { $$ = atom_typedef_atom_type($3);     }
-            | T_LEFTP T_COLON expression expression T_RIGHTP { $$ = atom_typedef_atom_atom($3, $4); }
+atom_typedef: T_LEFTP T_COLON expression T_TYPE T_RIGHTP     { $$ = atom_typedef_atom_type($2, $3);     }
+            | T_LEFTP T_COLON expression expression T_RIGHTP { $$ = atom_typedef_atom_atom($2, $3, $4); }
 ;
 
 function_typedef: T_LEFTP T_ARROW type_desc_list T_RIGHTP { $$ = function_typedef($3); }

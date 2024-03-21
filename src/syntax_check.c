@@ -47,10 +47,6 @@ char *function_typedef(struct HandleList composite) {
     return "";
 }
 
-char *typedef_function(struct HandleList atom_handle_list, char *function_handle) {
-    return "";
-}
-
 struct HandleList type_desc_type() {
     return EMPTY_HANDLE_LIST;
 }
@@ -71,11 +67,15 @@ struct HandleList type_desc_list_recursion(struct HandleList list, struct Handle
     return EMPTY_HANDLE_LIST;
 }
 
-char *atom_typedef_atom_type(struct HandleList atom_handle_list) {
+char *typedef_function(char *typedef_mark, struct HandleList atom_handle_list, char *function_handle) {
     return "";
 }
 
-char *atom_typedef_atom_atom(struct HandleList atom_handle_list, struct HandleList parent_handle_list) {
+char *atom_typedef_atom_type(char *typedef_mark, struct HandleList atom_handle_list) {
+    return "";
+}
+
+char *atom_typedef_atom_atom(char *typedef_mark, struct HandleList atom_handle_list, struct HandleList parent_handle_list) {
     return "";
 }
 

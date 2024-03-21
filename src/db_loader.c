@@ -98,6 +98,9 @@ static char *METTA_TYPE_SYMBOL = NULL;
 static char *TYPEDEF_MARK = ":";
 static char *TYPEDEF_MARK_HASH = NULL;
 static char *TYPEDEF_MARK_SYMBOL = NULL;
+static char *TYPEDEF_SUBTYPE_MARK = "<:";
+static char *TYPEDEF_SUBTYPE_MARK_HASH = NULL;
+static char *TYPEDEF_SUBTYPE_MARK_SYMBOL = NULL;
 static char *ARROW = "->";
 static char *ARROW_HASH = NULL;
 static char *COMPOSITE_TYPE_TYPEDEF_HASH = NULL;
@@ -110,6 +113,8 @@ static char *COMPOSITE_TYPE_TYPEDEF_HASH = NULL;
     S != METTA_TYPE_HASH && \
     S != TYPEDEF_MARK_HASH && \
     S != TYPEDEF_MARK_SYMBOL && \
+    S != TYPEDEF_SUBTYPE_MARK_HASH && \
+    S != TYPEDEF_SUBTYPE_MARK_SYMBOL && \
     S != ARROW_HASH && \
     S != COMPOSITE_TYPE_TYPEDEF_HASH) free(S);
 
@@ -649,7 +654,7 @@ static char *add_expression(bool is_toplevel, struct HandleList composite) {
     return hash;
 }
 
-static char *add_typedef(char *child, char *child_type, char *parent, char *parent_type) {
+static char *add_typedef(char *typedef_mark, char *child, char *child_type, char *parent, char *parent_type) {
 
     if (DEBUG) printf("ADD TYPEDEF %s -> %s\n", child, parent);
 
@@ -658,7 +663,14 @@ static char *add_typedef(char *child, char *child_type, char *parent, char *pare
     composite.expression_type_hash = EXPRESSION_HASH;
     composite.elements = (char **) malloc(composite.size * sizeof(char *));
     composite.elements_type = (char **) malloc(composite.size * sizeof(char *));
-    composite.elements[0] = TYPEDEF_MARK_SYMBOL;
+    if (! strcmp(typedef_mark, TYPEDEF_MARK)) {
+        composite.elements[0] = TYPEDEF_MARK_SYMBOL;
+    } else if (! strcmp(typedef_mark, TYPEDEF_SUBTYPE_MARK)) {
+        composite.elements[0] = TYPEDEF_SUBTYPE_MARK_SYMBOL;
+    } else {
+        fprintf(stderr, "Invalid TYPEDEF mark: %s\n", typedef_mark);
+        exit(1);
+    }
     composite.elements_type[0] = SYMBOL_HASH;
     composite.elements[1] = child;
     composite.elements_type[1] = child_type;
@@ -673,6 +685,7 @@ static char *add_typedef(char *child, char *child_type, char *parent, char *pare
 static void insert_commom_atoms() {
     TYPE_SYMBOL = add_symbol(TYPE, false, LONG_MIN, DBL_MIN, false);
     TYPEDEF_MARK_SYMBOL = add_symbol(TYPEDEF_MARK, false, LONG_MIN, DBL_MIN, false);
+    TYPEDEF_SUBTYPE_MARK_SYMBOL = add_symbol(TYPEDEF_SUBTYPE_MARK, false, LONG_MIN, DBL_MIN, false);
     SYMBOL_SYMBOL = add_symbol(SYMBOL, false, LONG_MIN, DBL_MIN, false);
     EXPRESSION_SYMBOL = add_symbol(EXPRESSION, false, LONG_MIN, DBL_MIN, false);
     METTA_TYPE_SYMBOL = add_symbol(METTA_TYPE, false, LONG_MIN, DBL_MIN, false);
@@ -688,6 +701,7 @@ void initialize_actions() {
     SYMBOL_HASH = named_type_hash(SYMBOL);
     EXPRESSION_HASH = named_type_hash(EXPRESSION);
     TYPEDEF_MARK_HASH = named_type_hash(TYPEDEF_MARK);
+    TYPEDEF_SUBTYPE_MARK_HASH = named_type_hash(TYPEDEF_SUBTYPE_MARK);
     ARROW_HASH = named_type_hash(ARROW);
     TYPE_HASH = named_type_hash(TYPE);
     METTA_TYPE_HASH = named_type_hash(METTA_TYPE);
@@ -730,22 +744,22 @@ void toplevel_list_recursion(char *handle) {
     free(handle);
 }
 
-char *atom_typedef_atom_type(struct HandleList atom_handle_list) {
+char *typedef_function(char *typedef_mark, struct HandleList atom_handle_list, char *function_handle) {
     char *atom = add_expression(false, atom_handle_list);
-    return add_typedef(atom, atom_handle_list.expression_type_hash, TYPE_SYMBOL, SYMBOL_HASH);
-}
-
-char *atom_typedef_atom_atom(struct HandleList atom_handle_list, struct HandleList parent_handle_list) {
-    char *atom = add_expression(false, atom_handle_list);
-    char *parent = add_expression(false, parent_handle_list);
-    return add_typedef(atom, atom_handle_list.expression_type_hash, parent, parent_handle_list.expression_type_hash);
-}
-
-char *typedef_function(struct HandleList atom_handle_list, char *function_handle) {
-    char *atom = add_expression(false, atom_handle_list);
-    char *answer = add_typedef(atom, atom_handle_list.expression_type_hash, string_copy(function_handle), EXPRESSION_HASH);
+    char *answer = add_typedef(typedef_mark, atom, atom_handle_list.expression_type_hash, string_copy(function_handle), EXPRESSION_HASH);
     free(function_handle);
     return answer;
+}
+
+char *atom_typedef_atom_type(char *typedef_mark, struct HandleList atom_handle_list) {
+    char *atom = add_expression(false, atom_handle_list);
+    return add_typedef(typedef_mark, atom, atom_handle_list.expression_type_hash, TYPE_SYMBOL, SYMBOL_HASH);
+}
+
+char *atom_typedef_atom_atom(char *typedef_mark, struct HandleList atom_handle_list, struct HandleList parent_handle_list) {
+    char *atom = add_expression(false, atom_handle_list);
+    char *parent = add_expression(false, parent_handle_list);
+    return add_typedef(typedef_mark, atom, atom_handle_list.expression_type_hash, parent, parent_handle_list.expression_type_hash);
 }
 
 char *function_typedef(struct HandleList composite) {
