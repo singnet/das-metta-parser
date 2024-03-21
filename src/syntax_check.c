@@ -95,6 +95,14 @@ char *symbol_typedef_literal_symbol(char *literal, char *parent_type) {
     return "";
 }
 
+char *symbol_typedef_symbol_literal(char *symbol, char *parent_type) {
+    return "";
+}
+
+char *symbol_typedef_literal_literal(char *literal, char *parent_type) {
+    return "";
+}
+
 struct HandleList expression_list_base(struct HandleList base) {
     return EMPTY_HANDLE_LIST;
 }

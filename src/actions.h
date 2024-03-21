@@ -20,6 +20,8 @@ struct HandleList type_desc_function(char *handle);
 char *symbol_typedef_symbol_type(char *symbol);
 char *symbol_typedef_symbol_symbol(char *symbol, char *parent_type);
 char *symbol_typedef_literal_symbol(char *literal, char *parent_type);
+char *symbol_typedef_symbol_literal(char *symbol, char *parent_type);
+char *symbol_typedef_literal_literal(char *literal, char *parent_type);
 struct HandleList type_desc_list_base(struct HandleList base);
 struct HandleList type_desc_list_recursion(struct HandleList list, struct HandleList new_element);
 struct HandleList expression_list_base(struct HandleList base);

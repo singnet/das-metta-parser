@@ -2,7 +2,7 @@
 
 %{
 
-#define DEBUG (0)
+#define DEBUG (1)
 
 #include <stdio.h>
 #define YY_DECL int yylex()

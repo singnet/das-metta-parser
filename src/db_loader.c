@@ -759,6 +759,14 @@ char *symbol_typedef_literal_symbol(char *literal, char *parent_type) {
     return add_typedef(literal, true, parent_type, false);
 }
 
+char *symbol_typedef_symbol_literal(char *symbol, char *parent_type) {
+    return add_typedef(symbol, false, parent_type, true);
+}
+
+char *symbol_typedef_literal_literal(char *literal, char *parent_type) {
+    return add_typedef(literal, true, parent_type, true);
+}
+
 char *inherited_typedef(char *symbol, char *parent_type) {
     return symbol_typedef_symbol_symbol(symbol, parent_type);
 }

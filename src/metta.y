@@ -77,9 +77,11 @@ base_typedef: symbol_typedef                                     { $$ = $1; }
 inherited_typedef: T_LEFTP T_LESSTHANCOLON T_SYMBOL T_SYMBOL T_RIGHTP { $$ = inherited_typedef($3, $4); }
 ;
 
-symbol_typedef: T_LEFTP T_COLON T_SYMBOL T_TYPE T_RIGHTP   { $$ = symbol_typedef_symbol_type($3);        }
-              | T_LEFTP T_COLON T_SYMBOL T_SYMBOL T_RIGHTP { $$ = symbol_typedef_symbol_symbol($3, $4);  }
-              | T_LEFTP T_COLON literal T_SYMBOL T_RIGHTP  { $$ = symbol_typedef_literal_symbol($3, $4); }
+symbol_typedef: T_LEFTP T_COLON T_SYMBOL T_TYPE T_RIGHTP   { $$ = symbol_typedef_symbol_type($3);         }
+              | T_LEFTP T_COLON T_SYMBOL T_SYMBOL T_RIGHTP { $$ = symbol_typedef_symbol_symbol($3, $4);   }
+              | T_LEFTP T_COLON literal T_SYMBOL T_RIGHTP  { $$ = symbol_typedef_literal_symbol($3, $4);  }
+              | T_LEFTP T_COLON T_SYMBOL literal T_RIGHTP  { $$ = symbol_typedef_symbol_literal($3, $4);  }
+              | T_LEFTP T_COLON literal literal T_RIGHTP   { $$ = symbol_typedef_literal_literal($3, $4); }
 ;
 
 function_typedef: T_LEFTP T_ARROW type_desc_list T_RIGHTP { $$ = function_typedef($3); }
