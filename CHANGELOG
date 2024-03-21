@@ -1,2 +1,3 @@
 [#36] Add support for comments and escaped characters in literals and symbol names
 [#39] Add support for empty expressions
+[das-query-engine#192] Add support to complex type definitions in DAS MeTTa parser.
