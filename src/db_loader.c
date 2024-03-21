@@ -97,6 +97,7 @@ static char *METTA_TYPE_HASH = NULL;
 static char *METTA_TYPE_SYMBOL = NULL;
 static char *TYPEDEF_MARK = ":";
 static char *TYPEDEF_MARK_HASH = NULL;
+static char *TYPEDEF_MARK_SYMBOL = NULL;
 static char *ARROW = "->";
 static char *ARROW_HASH = NULL;
 static char *COMPOSITE_TYPE_TYPEDEF_HASH = NULL;
@@ -105,8 +106,10 @@ static char *COMPOSITE_TYPE_TYPEDEF_HASH = NULL;
     S != SYMBOL_HASH && \
     S != EXPRESSION_HASH && \
     S != TYPE_HASH && \
+    S != TYPE_SYMBOL && \
     S != METTA_TYPE_HASH && \
     S != TYPEDEF_MARK_HASH && \
+    S != TYPEDEF_MARK_SYMBOL && \
     S != ARROW_HASH && \
     S != COMPOSITE_TYPE_TYPEDEF_HASH) free(S);
 
@@ -536,38 +539,10 @@ static void add_link_arity_2(
     free(hash);
 }
 
-static char *add_typedef(char *child_type, bool child_is_hash, char *parent_type, bool parent_is_hash) {
-
-    if (DEBUG) printf("ADD TYPEDEF %s (%s) %s (%s)\n", child_type, (child_is_hash ? "hash" : "string"), parent_type, (parent_is_hash ? "hash" : "string"));
-
-    bson_t *selector = bson_new();
-    bson_t *doc = bson_new();
-    char *child_hash = child_is_hash ? child_type : add_symbol(child_type, false, LONG_MIN, DBL_MIN, false);
-    char *parent_hash = parent_is_hash ? parent_type : add_symbol(parent_type, false, LONG_MIN, DBL_MIN, false);
-    char *pair[2] = {child_hash, parent_hash};
-    char *hash = expression_hash(TYPEDEF_MARK_HASH, pair, 2);
-    if (DEBUG) printf("\t_id: %s\n\tcomposite_type_hash: %s\n\tnamed_type: %s\n\tnamed_type_hash: %s\n", hash, COMPOSITE_TYPE_TYPEDEF_HASH, child_type, child_hash);
-    BSON_APPEND_UTF8(selector, "_id", hash);
-    BSON_APPEND_UTF8(doc, "_id", hash);
-    BSON_APPEND_UTF8(doc, "composite_type_hash", COMPOSITE_TYPE_TYPEDEF_HASH);
-    BSON_APPEND_UTF8(doc, "named_type", child_type);
-    BSON_APPEND_UTF8(doc, "named_type_hash", child_hash);
-    add_link_arity_2(METTA_TYPE, METTA_TYPE_HASH, child_hash, SYMBOL_HASH, parent_hash, SYMBOL_HASH);
-    if (! mongoc_collection_replace_one(MONGODB_TYPES, selector, doc, MONGODB_REPLACE_OPTIONS, NULL, &MONGODB_ERROR)) {
-        mongodb_error((char *) &MONGODB_ERROR.message);
-    } else {
-        bson_destroy(selector);
-        bson_destroy(doc);
-        if (! child_is_hash) {
-            free(child_hash);
-            free(child_type);
-        }
-        if (! parent_is_hash) {
-            free(parent_hash);
-            free(parent_type);
-        }
-    }
-    return hash;
+static int expression_cmp(const void *e1, const void *e2) {
+    return strcmp(
+        ((struct BufferedExpression *) e1)->hash,
+        ((struct BufferedExpression *) e2)->hash);
 }
 
 static void destroy_handle_list(struct HandleList *handle_list) {
@@ -583,12 +558,6 @@ static void destroy_handle_list(struct HandleList *handle_list) {
 static void destroy_buffered_expression(struct BufferedExpression *expression) {
     DESTROY_HANDLE(expression->hash);
     destroy_handle_list(&(expression->composite));
-}
-
-static int expression_cmp(const void *e1, const void *e2) {
-    return strcmp(
-        ((struct BufferedExpression *) e1)->hash,
-        ((struct BufferedExpression *) e2)->hash);
 }
 
 static void expression_copy(struct BufferedExpression *e1, struct BufferedExpression *e2) {
@@ -680,8 +649,30 @@ static char *add_expression(bool is_toplevel, struct HandleList composite) {
     return hash;
 }
 
+static char *add_typedef(char *child, char *child_type, char *parent, char *parent_type) {
+
+    if (DEBUG) printf("ADD TYPEDEF %s -> %s\n", child, parent);
+
+    struct HandleList composite;
+    composite.size = 3;
+    composite.expression_type_hash = EXPRESSION_HASH;
+    composite.elements = (char **) malloc(composite.size * sizeof(char *));
+    composite.elements_type = (char **) malloc(composite.size * sizeof(char *));
+    composite.elements[0] = TYPEDEF_MARK_SYMBOL;
+    composite.elements_type[0] = SYMBOL_HASH;
+    composite.elements[1] = child;
+    composite.elements_type[1] = child_type;
+    composite.elements[2] = parent;
+    composite.elements_type[2] = parent_type;
+
+    add_link_arity_2(METTA_TYPE, METTA_TYPE_HASH, child, child_type, parent, parent_type);
+
+    return add_expression(true, composite);
+}
+
 static void insert_commom_atoms() {
     TYPE_SYMBOL = add_symbol(TYPE, false, LONG_MIN, DBL_MIN, false);
+    TYPEDEF_MARK_SYMBOL = add_symbol(TYPEDEF_MARK, false, LONG_MIN, DBL_MIN, false);
     SYMBOL_SYMBOL = add_symbol(SYMBOL, false, LONG_MIN, DBL_MIN, false);
     EXPRESSION_SYMBOL = add_symbol(EXPRESSION, false, LONG_MIN, DBL_MIN, false);
     METTA_TYPE_SYMBOL = add_symbol(METTA_TYPE, false, LONG_MIN, DBL_MIN, false);
@@ -741,18 +732,18 @@ void toplevel_list_recursion(char *handle) {
 
 char *atom_typedef_atom_type(struct HandleList atom_handle_list) {
     char *atom = add_expression(false, atom_handle_list);
-    return add_typedef(atom, true, TYPE_SYMBOL, true);
+    return add_typedef(atom, atom_handle_list.expression_type_hash, TYPE_SYMBOL, SYMBOL_HASH);
 }
 
 char *atom_typedef_atom_atom(struct HandleList atom_handle_list, struct HandleList parent_handle_list) {
     char *atom = add_expression(false, atom_handle_list);
     char *parent = add_expression(false, parent_handle_list);
-    return add_typedef(atom, true, parent, true);
+    return add_typedef(atom, atom_handle_list.expression_type_hash, parent, parent_handle_list.expression_type_hash);
 }
 
 char *typedef_function(struct HandleList atom_handle_list, char *function_handle) {
     char *atom = add_expression(false, atom_handle_list);
-    char *answer = add_typedef(atom, true, function_handle, true);
+    char *answer = add_typedef(atom, atom_handle_list.expression_type_hash, string_copy(function_handle), EXPRESSION_HASH);
     free(function_handle);
     return answer;
 }
