@@ -739,39 +739,27 @@ void toplevel_list_recursion(char *handle) {
     free(handle);
 }
 
-char *typedef_base(char *handle) {
-    return handle;
-}
-
-char *typedef_inherited(char *handle) {
-    return handle;
-}
-
-char *symbol_typedef_symbol_type(char *symbol) {
+char *atom_typedef_symbol_type(char *symbol) {
     return add_typedef(symbol, false, TYPE_SYMBOL, true);
 }
 
-char *symbol_typedef_symbol_symbol(char *symbol, char *parent_type) {
+char *atom_typedef_symbol_symbol(char *symbol, char *parent_type) {
     return add_typedef(symbol, false, parent_type, false);
 }
 
-char *symbol_typedef_literal_symbol(char *literal, char *parent_type) {
+char *atom_typedef_literal_symbol(char *literal, char *parent_type) {
     return add_typedef(literal, true, parent_type, false);
 }
 
-char *symbol_typedef_symbol_literal(char *symbol, char *parent_type) {
+char *atom_typedef_symbol_literal(char *symbol, char *parent_type) {
     return add_typedef(symbol, false, parent_type, true);
 }
 
-char *symbol_typedef_literal_literal(char *literal, char *parent_type) {
+char *atom_typedef_literal_literal(char *literal, char *parent_type) {
     return add_typedef(literal, true, parent_type, true);
 }
 
-char *inherited_typedef(char *symbol, char *parent_type) {
-    return symbol_typedef_symbol_symbol(symbol, parent_type);
-}
-
-char *base_typedef_function(char *symbol, char *function_handle) {
+char *typedef_function(char *symbol, char *function_handle) {
     char *answer = add_typedef(symbol, false, function_handle, true);
     free(function_handle);
     return answer;

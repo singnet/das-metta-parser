@@ -39,13 +39,9 @@
     if (DEBUG) { fprintf(stdout, "T_RIGHTP\n"); }
     return T_RIGHTP;
 }
-":" {
+":"|"<:" {
     if (DEBUG) { fprintf(stdout, "T_COLON\n"); }
     return T_COLON;
-}
-"<:" {
-    if (DEBUG) { fprintf(stdout, "T_LESSTHANCOLON\n"); }
-    return T_LESSTHANCOLON;
 }
 "->" {
     if (DEBUG) { fprintf(stdout, "T_ARROW\n"); }
