@@ -26,10 +26,7 @@ extern struct HandleList EMPTY_HANDLE_LIST;
 static mongoc_database_t *MONGODB = NULL;
 static mongoc_client_t *MONGODB_CLIENT = NULL;
 static mongoc_collection_t *MONGODB_TYPES= NULL;
-static mongoc_collection_t *MONGODB_NODES= NULL;
-static mongoc_collection_t *MONGODB_LINKS_1= NULL;
-static mongoc_collection_t *MONGODB_LINKS_2= NULL;
-static mongoc_collection_t *MONGODB_LINKS_N= NULL;
+static mongoc_collection_t *MONGODB_ATOMS= NULL;
 static bson_t MONGODB_REPLY = BSON_INITIALIZER;
 static bson_error_t MONGODB_ERROR = {0};
 static bson_t *MONGODB_REPLACE_OPTIONS = NULL;
@@ -123,10 +120,7 @@ static void mongodb_destroy() {
     mongoc_database_destroy(MONGODB);
     mongoc_client_destroy(MONGODB_CLIENT);
     mongoc_collection_destroy(MONGODB_TYPES);
-    mongoc_collection_destroy(MONGODB_NODES);
-    mongoc_collection_destroy(MONGODB_LINKS_1);
-    mongoc_collection_destroy(MONGODB_LINKS_2);
-    mongoc_collection_destroy(MONGODB_LINKS_N);
+    mongoc_collection_destroy(MONGODB_ATOMS);
     bson_destroy(&MONGODB_REPLY);
     bson_destroy(MONGODB_REPLACE_OPTIONS);
     bson_destroy(MONGODB_INSERT_MANY_OPTIONS);
@@ -165,10 +159,7 @@ static void mongodb_setup() {
         mongodb_error("Failed to create a MongoDB client.");
     }
     MONGODB_TYPES = mongoc_client_get_collection(MONGODB_CLIENT, "das", "atom_types");
-    MONGODB_NODES = mongoc_client_get_collection(MONGODB_CLIENT, "das", "nodes");
-    MONGODB_LINKS_1 = mongoc_client_get_collection(MONGODB_CLIENT, "das", "links_1");
-    MONGODB_LINKS_2 = mongoc_client_get_collection(MONGODB_CLIENT, "das", "links_2");
-    MONGODB_LINKS_N = mongoc_client_get_collection(MONGODB_CLIENT, "das", "links_n");
+    MONGODB_ATOMS = mongoc_client_get_collection(MONGODB_CLIENT, "das", "atoms");
 
     MONGODB_REPLACE_OPTIONS = bson_new();
     BSON_APPEND_BOOL(MONGODB_REPLACE_OPTIONS, "upsert", true);
@@ -335,7 +326,7 @@ static void flush_symbol_buffer() {
                 SYMBOL_BUFFER[i].value_as_float);
     }
     bool mongo_ok = mongoc_collection_insert_many(
-            MONGODB_NODES,
+            MONGODB_ATOMS,
             (const bson_t **) bulk_insertion_buffer,
             new_size,
             MONGODB_INSERT_MANY_OPTIONS,
@@ -495,7 +486,7 @@ static bson_t *build_expression_bson_document(char *hash, bool is_toplevel, stru
     return doc;
 }
 
-static void add_link_arity_2(
+static void add_links(
         char *link_type, 
         char *link_type_hash, 
         char *source_hash, 
@@ -528,7 +519,7 @@ static void add_link_arity_2(
             link_type_hash);
     bool mongodb_ok = mongoc_collection_insert_many(
             // XXX TODO Fix mongodb collections
-            MONGODB_LINKS_N,
+            MONGODB_ATOMS,
             (const bson_t **) &doc,
             1,
             MONGODB_INSERT_MANY_OPTIONS,
@@ -617,7 +608,7 @@ static void flush_expression_buffer() {
 
     bool mongodb_ok = mongoc_collection_insert_many(
             // XXX TODO Fix mongodb collections
-            MONGODB_LINKS_N,
+            MONGODB_ATOMS,
             (const bson_t **) bulk_insertion_buffer,
             new_size,
             MONGODB_INSERT_MANY_OPTIONS,
@@ -677,7 +668,7 @@ static char *add_typedef(char *typedef_mark, char *child, char *child_type, char
     composite.elements[2] = parent;
     composite.elements_type[2] = parent_type;
 
-    add_link_arity_2(METTA_TYPE, METTA_TYPE_HASH, child, child_type, parent, parent_type);
+    add_links(METTA_TYPE, METTA_TYPE_HASH, child, child_type, parent, parent_type);
 
     return add_expression(true, composite);
 }
