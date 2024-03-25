@@ -362,10 +362,6 @@ static char *add_symbol(char *name, bool is_literal, long value_as_int, double v
 
 static void add_redis_pattern(char **composite_key, unsigned int arity, char *value) {
     char *key = expression_hash(EXPRESSION_HASH, composite_key, arity);
-    //printf("\tADD PATTERN: %s <%s>\n", key, value);
-    // if (arity == 3) {
-    //     printf("\tXXX %s %s %s\n", composite_key[0], composite_key[1], composite_key[2]);
-    // }
     REDIS_APPEND_COMMAND_MACRO(REDIS, "SADD %s:%s %s", PATTERNS, key, value);
     PENDING_REDIS_COMMANDS++;
     free(key);
@@ -518,7 +514,6 @@ static void add_links(
             link_type,
             link_type_hash);
     bool mongodb_ok = mongoc_collection_insert_many(
-            // XXX TODO Fix mongodb collections
             MONGODB_ATOMS,
             (const bson_t **) &doc,
             1,
@@ -607,7 +602,6 @@ static void flush_expression_buffer() {
     }
 
     bool mongodb_ok = mongoc_collection_insert_many(
-            // XXX TODO Fix mongodb collections
             MONGODB_ATOMS,
             (const bson_t **) bulk_insertion_buffer,
             new_size,
@@ -742,23 +736,16 @@ char *typedef_function(char *typedef_mark, struct HandleList atom_handle_list, c
     return answer;
 }
 
-char *atom_typedef_atom_type(char *typedef_mark, struct HandleList atom_handle_list) {
-    char *atom = add_expression(false, atom_handle_list);
-    return add_typedef(typedef_mark, atom, atom_handle_list.expression_type_hash, TYPE_SYMBOL, SYMBOL_HASH);
-}
-
-char *atom_typedef_atom_atom(char *typedef_mark, struct HandleList atom_handle_list, struct HandleList parent_handle_list) {
-    char *atom = add_expression(false, atom_handle_list);
-    char *parent = add_expression(false, parent_handle_list);
-    return add_typedef(typedef_mark, atom, atom_handle_list.expression_type_hash, parent, parent_handle_list.expression_type_hash);
+char *typedef_expression_expression(char *typedef_mark, struct HandleList atom_handle_list, struct HandleList parent_handle_list) {
+    char *atom = atom_handle_list.elements[0];
+    char *atom_type = atom_handle_list.elements_type[0];
+    char *parent = parent_handle_list.elements[0];
+    char *parent_type = parent_handle_list.elements_type[0];
+    return add_typedef(typedef_mark, atom, atom_type, parent, parent_type);
 }
 
 char *function_typedef(struct HandleList composite) {
     return add_function_typedef(composite);
-}
-
-struct HandleList type_desc_type() {
-    return build_handle_list(TYPE_SYMBOL, SYMBOL_HASH);
 }
 
 struct HandleList type_desc_symbol(char *symbol) {

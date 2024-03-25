@@ -48,10 +48,6 @@
     if (DEBUG) { fprintf(stdout, "T_ARROW\n"); }
     return T_ARROW;
 }
-"Type" {
-    if (DEBUG) { fprintf(stdout, "T_TYPE\n"); }
-    return T_TYPE;
-}
 ([^[:space:]:()<>"]|\\(.|\n))+ {
     yylval.sval = strdup(yytext);
     if (DEBUG) { fprintf(stdout, "T_SYMBOL <%s>\n", yytext); }
