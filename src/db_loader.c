@@ -482,7 +482,7 @@ static bson_t *build_expression_bson_document(char *hash, bool is_toplevel, stru
     return doc;
 }
 
-static void add_links(
+static void add_link(
         char *link_type, 
         char *link_type_hash, 
         char *source_hash, 
@@ -643,6 +643,23 @@ static char *add_typedef(char *typedef_mark, char *child, char *child_type, char
 
     if (DEBUG) printf("ADD TYPEDEF %s -> %s\n", child, parent);
 
+    bson_t *selector = bson_new();
+    bson_t *doc = bson_new();
+    char *pair[2] = {child, parent};
+    char *template_hash = expression_hash(TYPEDEF_MARK_HASH, pair, 2);
+    if (DEBUG) printf("\t_id: %s\n\tcomposite_type_hash: %s\n\tnamed_type: %s\n\tnamed_type_hash: %s\n", template_hash, COMPOSITE_TYPE_TYPEDEF_HASH, child_type, child);
+    BSON_APPEND_UTF8(selector, "_id", template_hash);
+    BSON_APPEND_UTF8(doc, "_id", template_hash);
+    BSON_APPEND_UTF8(doc, "composite_type_hash", COMPOSITE_TYPE_TYPEDEF_HASH);
+    BSON_APPEND_UTF8(doc, "named_type", (! strcmp(child_type, SYMBOL_HASH) ? SYMBOL : EXPRESSION));
+    BSON_APPEND_UTF8(doc, "named_type_hash", child);
+    if (! mongoc_collection_replace_one(MONGODB_TYPES, selector, doc, MONGODB_REPLACE_OPTIONS, NULL, &MONGODB_ERROR)) {
+        mongodb_error((char *) &MONGODB_ERROR.message);
+    } else {
+        bson_destroy(selector);
+        bson_destroy(doc);
+    }
+
     struct HandleList composite;
     composite.size = 3;
     composite.expression_type_hash = EXPRESSION_HASH;
@@ -662,7 +679,7 @@ static char *add_typedef(char *typedef_mark, char *child, char *child_type, char
     composite.elements[2] = parent;
     composite.elements_type[2] = parent_type;
 
-    add_links(METTA_TYPE, METTA_TYPE_HASH, child, child_type, parent, parent_type);
+    add_link(METTA_TYPE, METTA_TYPE_HASH, child, child_type, parent, parent_type);
 
     return add_expression(true, composite);
 }
@@ -730,8 +747,9 @@ void toplevel_list_recursion(char *handle) {
 }
 
 char *typedef_function(char *typedef_mark, struct HandleList atom_handle_list, char *function_handle) {
-    char *atom = add_expression(false, atom_handle_list);
-    char *answer = add_typedef(typedef_mark, atom, atom_handle_list.expression_type_hash, string_copy(function_handle), EXPRESSION_HASH);
+    char *atom = atom_handle_list.elements[0];
+    char *atom_type = atom_handle_list.elements_type[0];
+    char *answer = add_typedef(typedef_mark, atom, atom_type, string_copy(function_handle), EXPRESSION_HASH);
     free(function_handle);
     return answer;
 }
