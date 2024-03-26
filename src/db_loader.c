@@ -362,10 +362,6 @@ static char *add_symbol(char *name, bool is_literal, long value_as_int, double v
 
 static void add_redis_pattern(char **composite_key, unsigned int arity, char *value) {
     char *key = expression_hash(EXPRESSION_HASH, composite_key, arity);
-    //printf("\tADD PATTERN: %s <%s>\n", key, value);
-    // if (arity == 3) {
-    //     printf("\tXXX %s %s %s\n", composite_key[0], composite_key[1], composite_key[2]);
-    // }
     REDIS_APPEND_COMMAND_MACRO(REDIS, "SADD %s:%s %s", PATTERNS, key, value);
     PENDING_REDIS_COMMANDS++;
     free(key);
@@ -486,7 +482,7 @@ static bson_t *build_expression_bson_document(char *hash, bool is_toplevel, stru
     return doc;
 }
 
-static void add_links(
+static void add_link(
         char *link_type, 
         char *link_type_hash, 
         char *source_hash, 
@@ -518,7 +514,6 @@ static void add_links(
             link_type,
             link_type_hash);
     bool mongodb_ok = mongoc_collection_insert_many(
-            // XXX TODO Fix mongodb collections
             MONGODB_ATOMS,
             (const bson_t **) &doc,
             1,
@@ -607,7 +602,6 @@ static void flush_expression_buffer() {
     }
 
     bool mongodb_ok = mongoc_collection_insert_many(
-            // XXX TODO Fix mongodb collections
             MONGODB_ATOMS,
             (const bson_t **) bulk_insertion_buffer,
             new_size,
@@ -647,7 +641,24 @@ static char *add_expression(bool is_toplevel, struct HandleList composite) {
 
 static char *add_typedef(char *typedef_mark, char *child, char *child_type, char *parent, char *parent_type) {
 
-    if (DEBUG) printf("ADD TYPEDEF %s -> %s\n", child, parent);
+    if (DEBUG) printf("ADD TYPEDEF %s (%s) -> %s (%s) \n", child, child_type, parent, parent_type);
+
+    bson_t *selector = bson_new();
+    bson_t *doc = bson_new();
+    char *pair[2] = {child, parent};
+    char *template_hash = expression_hash(TYPEDEF_MARK_HASH, pair, 2);
+    if (DEBUG) printf("\t_id: %s\n\tcomposite_type_hash: %s\n\tnamed_type: %s\n\tnamed_type_hash: %s\n", template_hash, COMPOSITE_TYPE_TYPEDEF_HASH, child_type, child);
+    BSON_APPEND_UTF8(selector, "_id", template_hash);
+    BSON_APPEND_UTF8(doc, "_id", template_hash);
+    BSON_APPEND_UTF8(doc, "composite_type_hash", COMPOSITE_TYPE_TYPEDEF_HASH);
+    BSON_APPEND_UTF8(doc, "named_type", (! strcmp(child_type, SYMBOL_HASH) ? SYMBOL : EXPRESSION));
+    BSON_APPEND_UTF8(doc, "named_type_hash", child);
+    if (! mongoc_collection_replace_one(MONGODB_TYPES, selector, doc, MONGODB_REPLACE_OPTIONS, NULL, &MONGODB_ERROR)) {
+        mongodb_error((char *) &MONGODB_ERROR.message);
+    } else {
+        bson_destroy(selector);
+        bson_destroy(doc);
+    }
 
     struct HandleList composite;
     composite.size = 3;
@@ -662,13 +673,13 @@ static char *add_typedef(char *typedef_mark, char *child, char *child_type, char
         fprintf(stderr, "Invalid TYPEDEF mark: %s\n", typedef_mark);
         exit(1);
     }
-    composite.elements_type[0] = SYMBOL_HASH;
     composite.elements[1] = child;
-    composite.elements_type[1] = child_type;
     composite.elements[2] = parent;
+    composite.elements_type[0] = SYMBOL_HASH;
+    composite.elements_type[1] = child_type;
     composite.elements_type[2] = parent_type;
 
-    add_links(METTA_TYPE, METTA_TYPE_HASH, child, child_type, parent, parent_type);
+    add_link(METTA_TYPE, METTA_TYPE_HASH, child, child_type, parent, parent_type);
 
     return add_expression(true, composite);
 }
@@ -736,29 +747,23 @@ void toplevel_list_recursion(char *handle) {
 }
 
 char *typedef_function(char *typedef_mark, struct HandleList atom_handle_list, char *function_handle) {
-    char *atom = add_expression(false, atom_handle_list);
-    char *answer = add_typedef(typedef_mark, atom, atom_handle_list.expression_type_hash, string_copy(function_handle), EXPRESSION_HASH);
+    char *atom = atom_handle_list.elements[0];
+    char *atom_type = atom_handle_list.elements_type[0];
+    char *answer = add_typedef(typedef_mark, atom, atom_type, string_copy(function_handle), EXPRESSION_HASH);
     free(function_handle);
     return answer;
 }
 
-char *atom_typedef_atom_type(char *typedef_mark, struct HandleList atom_handle_list) {
-    char *atom = add_expression(false, atom_handle_list);
-    return add_typedef(typedef_mark, atom, atom_handle_list.expression_type_hash, TYPE_SYMBOL, SYMBOL_HASH);
-}
-
-char *atom_typedef_atom_atom(char *typedef_mark, struct HandleList atom_handle_list, struct HandleList parent_handle_list) {
-    char *atom = add_expression(false, atom_handle_list);
-    char *parent = add_expression(false, parent_handle_list);
-    return add_typedef(typedef_mark, atom, atom_handle_list.expression_type_hash, parent, parent_handle_list.expression_type_hash);
+char *typedef_expression_expression(char *typedef_mark, struct HandleList atom_handle_list, struct HandleList parent_handle_list) {
+    char *atom = atom_handle_list.elements[0];
+    char *atom_type = atom_handle_list.elements_type[0];
+    char *parent = parent_handle_list.elements[0];
+    char *parent_type = parent_handle_list.elements_type[0];
+    return add_typedef(typedef_mark, atom, atom_type, parent, parent_type);
 }
 
 char *function_typedef(struct HandleList composite) {
     return add_function_typedef(composite);
-}
-
-struct HandleList type_desc_type() {
-    return build_handle_list(TYPE_SYMBOL, SYMBOL_HASH);
 }
 
 struct HandleList type_desc_symbol(char *symbol) {

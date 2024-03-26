@@ -29,7 +29,7 @@ unsigned long INPUT_LINE_COUNT;
 
 %token<ival> T_INT
 %token<fval> T_FLOAT
-%token<sval> T_SYMBOL T_TYPE T_QUOTED_STR
+%token<sval> T_SYMBOL T_QUOTED_STR
 %token<sval> T_COLON
 %token T_ARROW
 %token T_LEFTP T_RIGHTP
@@ -41,7 +41,6 @@ unsigned long INPUT_LINE_COUNT;
 %type<eval> expression_list
 
 %type<sval> typedef
-%type<sval> atom_typedef
 %type<sval> function_typedef
 %type<sval> toplevel
 %type<sval> toplevel_expression
@@ -65,12 +64,8 @@ toplevel: typedef             { $$ = $1; }
         | toplevel_expression { $$ = $1; }
 ;
 
-typedef: atom_typedef                                         { $$ = $1; }
-       | T_LEFTP T_COLON expression function_typedef T_RIGHTP { $$ = typedef_function($2, $3, $4); }
-;
-
-atom_typedef: T_LEFTP T_COLON expression T_TYPE T_RIGHTP     { $$ = atom_typedef_atom_type($2, $3);     }
-            | T_LEFTP T_COLON expression expression T_RIGHTP { $$ = atom_typedef_atom_atom($2, $3, $4); }
+typedef: T_LEFTP T_COLON expression expression T_RIGHTP       { $$ = typedef_expression_expression($2, $3, $4); }
+       | T_LEFTP T_COLON expression function_typedef T_RIGHTP { $$ = typedef_function($2, $3, $4);              }
 ;
 
 function_typedef: T_LEFTP T_ARROW type_desc_list T_RIGHTP { $$ = function_typedef($3); }
@@ -80,8 +75,7 @@ type_desc_list: type_desc                { $$ = type_desc_list_base($1);        
               | type_desc_list type_desc { $$ = type_desc_list_recursion($1, $2); }
 ;
 
-type_desc: T_TYPE           { $$ = type_desc_type();     }
-         | T_SYMBOL         { $$ = type_desc_symbol($1);   }
+type_desc: T_SYMBOL         { $$ = type_desc_symbol($1);   }
          | function_typedef { $$ = type_desc_function($1); }
 ;
 
