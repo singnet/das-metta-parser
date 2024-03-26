@@ -641,7 +641,7 @@ static char *add_expression(bool is_toplevel, struct HandleList composite) {
 
 static char *add_typedef(char *typedef_mark, char *child, char *child_type, char *parent, char *parent_type) {
 
-    if (DEBUG) printf("ADD TYPEDEF %s -> %s\n", child, parent);
+    if (DEBUG) printf("ADD TYPEDEF %s (%s) -> %s (%s) \n", child, child_type, parent, parent_type);
 
     bson_t *selector = bson_new();
     bson_t *doc = bson_new();
@@ -673,10 +673,10 @@ static char *add_typedef(char *typedef_mark, char *child, char *child_type, char
         fprintf(stderr, "Invalid TYPEDEF mark: %s\n", typedef_mark);
         exit(1);
     }
-    composite.elements_type[0] = SYMBOL_HASH;
     composite.elements[1] = child;
-    composite.elements_type[1] = child_type;
     composite.elements[2] = parent;
+    composite.elements_type[0] = SYMBOL_HASH;
+    composite.elements_type[1] = child_type;
     composite.elements_type[2] = parent_type;
 
     add_link(METTA_TYPE, METTA_TYPE_HASH, child, child_type, parent, parent_type);
