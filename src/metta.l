@@ -48,7 +48,7 @@
     if (DEBUG) { fprintf(stdout, "T_ARROW\n"); }
     return T_ARROW;
 }
-([^[:space:]:()<>"]|\\(.|\n))+ {
+([^[:space:]()<>"]|\\(.|\n))+ {
     yylval.sval = strdup(yytext);
     if (DEBUG) { fprintf(stdout, "T_SYMBOL <%s>\n", yytext); }
     return T_SYMBOL;
