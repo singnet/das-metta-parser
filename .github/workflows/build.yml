@@ -9,21 +9,8 @@ on:
         required: true
 
 jobs:
-  tag:
-    uses: singnet/das-scripts-pipeline/.github/workflows/action.yml@master
-    with:
-      version: ${{ github.event.inputs.version }}
-      version-strategy: bump-version-from-variable-value
-      job-image-namespace: trueagi
-      job-image-version-semver: semantic-versioning
-      main-branch: master
-      version-tag-regex-pattern: /^v\d+\.\d+\.\d+$/
-      version-require-confirmation: "true"
-    secrets: inherit
-
   build-binary:
     runs-on: ubuntu-latest
-    needs: tag
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -48,7 +35,6 @@ jobs:
 
   build-image:
     runs-on: ubuntu-latest
-    needs: tag
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -61,7 +47,26 @@ jobs:
           password: ${{ secrets.DOCKER_PASSWORD }}
 
       - name: Build Dockerfile
-        run: docker build -f ./docker/Dockerfile.toolbox -t trueagi/das:${{ github.event.inputs.version }}-toolbox .
+        run: |-
+          docker build -f ./docker/Dockerfile.toolbox -t trueagi/das:${{ github.event.inputs.version }}-metta-parser .
+          docker image tag trueagi/das:${{ github.event.inputs.version }}-metta-parser trueagi/das:latest-metta-parser
 
       - name: Push Image to Registry
-        run: docker image push trueagi/das:${{ github.event.inputs.version }}-toolbox
+        run: |-
+          docker image push trueagi/das:${{ github.event.inputs.version }}-metta-parser
+          docker image push trueagi/das:latest-metta-parser
+
+  tag:
+    uses: singnet/das-scripts-pipeline/.github/workflows/action.yml@master
+    needs:
+      - build-image
+      - build-binary
+    with:
+      version: ${{ github.event.inputs.version }}
+      version-strategy: bump-version-from-variable-value
+      job-image-namespace: trueagi
+      job-image-version-semver: semantic-versioning
+      main-branch: master
+      version-tag-regex-pattern: /^v\d+\.\d+\.\d+$/
+      version-require-confirmation: "true"
+    secrets: inherit
