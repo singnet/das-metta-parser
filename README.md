@@ -25,3 +25,101 @@ NB you are expected to pass a single file to `run.sh`. No directories, no wildca
 ./scripts/run.sh db_loader /path/to/file.metta
 ./scripts/run.sh db_loader_redis_cluster /path/to/file.metta
 ```
+
+## Mapping MeTTa expressions to Atomspace nodes and links
+
+MeTTa expressions are mapped to nodes and links using only two types of atoms:
+
+* Symbols (nodes)
+* Expressions (links)
+
+E.g. an expression like:
+
+```
+(A B (C D))
+```
+
+Is mapped to 4 nodes and 2 links like this:
+
+```
+Expression
+    Symbol 'A'
+    Symbol 'B'
+    Expression
+        Symbol 'C'
+        Symbol 'D'
+```
+
+Literals are mapped likewise. For instance, this expression:
+
+```
+(A "text text text")
+```
+
+is mapped like this:
+
+```
+Expression
+    Symbol 'A'
+    Symbol '"text text text"'
+```
+
+NB the double quotes `"` are part of the Symbol name. In addition to this,
+literals are marked as such with a `is_literal` flag in the Python dict which
+represents the atom. Numeric literals are similar:
+
+```
+(A 0.5)
+```
+
+is mapped like this:
+
+```
+Expression
+    Symbol A
+    Symbol '0.5'
+```
+
+In this case, the name of the Symbol node is the string '0.5', but in adition
+to the `is_literal` flag, an extra field `value_as_float` is added to the
+Python dict which represents the atom. It's the same for integer literals,
+which gain an extra `value_as_int` field.
+
+Type definitions are treated in a similar fashion:
+
+```
+(: A Concept)
+```
+
+is mapped to:
+
+```
+Expression
+    Symbol ':'
+    Symbol 'A'
+    Symbol 'Concept'
+```
+
+However, type definitions have a side-effect which is the creation of an extra link of type MettaType:
+
+```
+MettaType
+    Symbol 'A'
+    Symbol 'Concept'
+```
+
+NB Type definitions may have expressions in the place of symbols. For instance:
+
+```
+(: A (B C))
+```
+
+In this case, in addition to the usual Expression and Symbol atoms, a MettaType link will be created like this:
+
+```
+MeTTaType
+    Symbol 'A'
+    Expression
+        Symbol 'B'
+        Symbol 'C'
+```
