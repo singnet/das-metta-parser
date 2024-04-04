@@ -117,7 +117,7 @@ NB Type definitions may have expressions in the place of symbols. For instance:
 In this case, in addition to the usual Expression and Symbol atoms, a MettaType link will be created like this:
 
 ```
-MeTTaType
+MettaType
     Symbol 'A'
     Expression
         Symbol 'B'
