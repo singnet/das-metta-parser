@@ -49,6 +49,7 @@ static bson_t *MONGODB_INSERT_MANY_OPTIONS = NULL;
 static REDIS_CONTEXT_MACRO *REDIS = NULL;
 static unsigned int HASH_SIZE = 0;
 static unsigned int MAX_INDEXABLE_ARITY = 4;
+static unsigned int MAX_ARITY = 100;
 static unsigned int PENDING_REDIS_COMMANDS = 0;
 static char WILDCARD[] = "*";
 static char **KEY_BUFFER = NULL;
@@ -197,7 +198,7 @@ static void redis_setup() {
 
     HASH_SIZE = strlen(SYMBOL_HASH);
     KEY_BUFFER = (char **) malloc(MAX_INDEXABLE_ARITY * sizeof(char *));
-    VALUE_BUFFER = (char *) malloc(((HASH_SIZE * (MAX_INDEXABLE_ARITY + 1)) + 1) * sizeof(char));
+    VALUE_BUFFER = (char *) malloc(((HASH_SIZE * (MAX_ARITY + 1)) + 1) * sizeof(char));
 }
 
 static struct HandleList build_handle_list(char *element, char *element_type) {
@@ -369,6 +370,11 @@ static void add_redis_pattern(char **composite_key, unsigned int arity, char *va
 
 static void add_redis_indexes(char *hash, struct HandleList *composite, char *composite_type_hash) {
 
+    unsigned int arity = composite->size;
+    if (arity > MAX_ARITY) {
+        fprintf(stderr, "Composite arity %d is too large\n", arity);
+        exit(1);
+    }
     // Incoming and outgoing sets
     unsigned int cursor = 0;
     for (unsigned int i = 0; i < composite->size; i++) {
@@ -400,7 +406,6 @@ static void add_redis_indexes(char *hash, struct HandleList *composite, char *co
     PENDING_REDIS_COMMANDS++;
 
     // Patterns
-    unsigned int arity = composite->size;
     if (arity > MAX_INDEXABLE_ARITY) {
         return;
     }

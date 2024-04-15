@@ -21,12 +21,12 @@
 [#].*\n {
     if (DEBUG) { fprintf(stdout, "COMMENT %s\n", yytext); }
 }
-[0-9]+\.[0-9]+ {
+-?[0-9]+\.[0-9]+ {
     yylval.fval = atof(yytext);
     if (DEBUG) { fprintf(stdout, "T_FLOAT %g\n", yylval.fval); }
     return T_FLOAT;
 }
-[0-9]+ {
+-?[0-9]+ {
     yylval.ival = atoi(yytext);
     if (DEBUG) { fprintf(stdout, "T_INT %ld\n", yylval.ival); }
     return T_INT;

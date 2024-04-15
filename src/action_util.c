@@ -27,6 +27,8 @@ void print_progress_bar(
         unsigned int max_step,
         bool print_eol) {
 
+    bool LOG_STYLE = true;
+
     if (total <= PROGRESS_BAR_LENGTH) {
         return;
     }
@@ -48,9 +50,13 @@ void print_progress_bar(
             line[cursor++] = '-';
         }
         line[cursor] = '\0';
-        printf("\r STEP %d/%d Progress: |%s| %s%% complete (%d/%d)", step, max_step, line, percent, iteration, total);
-        if (print_eol) {
-            printf("\n");
+        if (LOG_STYLE) {
+            printf("\r STEP %d/%d %s%% complete (%d/%d) \n", step, max_step, percent, iteration, total);
+        } else {
+            printf("\r STEP %d/%d Progress: |%s| %s%% complete (%d/%d)", step, max_step, line, percent, iteration, total);
+            if (print_eol) {
+                printf("\n");
+            }
         }
         fflush(stdout);
     }

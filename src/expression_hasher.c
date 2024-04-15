@@ -32,7 +32,8 @@ char *named_type_hash(char *name) {
 
 char *terminal_hash(char *type, char *name) {
     if (strlen(type) + strlen(name) >= MAX_HASHABLE_STRING_SIZE) {
-        return NULL;
+        fprintf(stderr, "Invalid (too large) terminal name");
+        exit(1);
     }
     sprintf(HASHABLE_STRING, "%s%c%s", type, JOINING_CHAR, name);
     return compute_hash(HASHABLE_STRING);
@@ -46,13 +47,15 @@ char *composite_hash(char **elements, unsigned int nelements) {
     for (unsigned int i = 0; i < nelements; i++) {
         unsigned int size = strlen(elements[i]);
         if (size > MAX_LITERAL_OR_SYMBOL_SIZE) {
-            return NULL;
+            fprintf(stderr, "Invalid (too large) composite elements");
+            exit(1);
         }
         element_size[i] = size;
         total_size += size;
     }
     if (total_size >= MAX_HASHABLE_STRING_SIZE) {
-        return NULL;
+        fprintf(stderr, "Invalid (too large) composite elements");
+        exit(1);
     }
 
     unsigned long cursor = 0;
