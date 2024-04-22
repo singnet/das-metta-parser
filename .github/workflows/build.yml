@@ -57,7 +57,7 @@ jobs:
           docker image push trueagi/das:latest-metta-parser
 
   tag:
-    uses: singnet/das-scripts-pipeline/.github/workflows/action.yml@master
+    uses: singnet/das/scripts/semver/semver.yml@master
     needs:
       - build-image
       - build-binary
