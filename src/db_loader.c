@@ -63,8 +63,8 @@ static char PATTERNS[] = "patterns";
 // Atom insertion buffers
 #define EXPRESSION_BUFFER_SIZE ((unsigned int) 100000)
 #define SYMBOL_BUFFER_SIZE ((unsigned int) 300000)
-static unsigned int EXPRESSION_BUFFER_CURSOR = 0;
-static unsigned int SYMBOL_BUFFER_CURSOR = 0;
+static unsigned long int EXPRESSION_BUFFER_CURSOR = 0;
+static unsigned long int SYMBOL_BUFFER_CURSOR = 0;
 struct BufferedExpression {
     bool is_toplevel;
     struct HandleList composite;
@@ -346,21 +346,6 @@ static void flush_symbol_buffer() {
 #endif
 }
 
-static char *add_symbol(char *name, bool is_literal, long value_as_int, double value_as_float, bool destroy_name) {
-    char *hash = terminal_hash(SYMBOL, name);
-    if (DEBUG) printf("ADD SYMBOL %s (%s) %ld %e (symbol hash: %s)\n", name, (is_literal ? "literal" : "non literal"), value_as_int, value_as_float, hash);
-    SYMBOL_BUFFER[SYMBOL_BUFFER_CURSOR].is_literal = is_literal;
-    SYMBOL_BUFFER[SYMBOL_BUFFER_CURSOR].value_as_int = value_as_int;
-    SYMBOL_BUFFER[SYMBOL_BUFFER_CURSOR].value_as_float = value_as_float;
-    SYMBOL_BUFFER[SYMBOL_BUFFER_CURSOR].hash = string_copy(hash);
-    SYMBOL_BUFFER[SYMBOL_BUFFER_CURSOR].name = string_copy(name);
-    SYMBOL_BUFFER_CURSOR++;
-    if (destroy_name) {
-        free(name);
-    }
-    return hash;
-}
-
 static void add_redis_pattern(char **composite_key, unsigned int arity, char *value) {
     char *key = expression_hash(EXPRESSION_HASH, composite_key, arity);
     REDIS_APPEND_COMMAND_MACRO(REDIS, "SADD %s:%s %s", PATTERNS, key, value);
@@ -626,6 +611,26 @@ static void flush_expression_buffer() {
 #endif
 }
 
+static char *add_symbol(char *name, bool is_literal, long value_as_int, double value_as_float, bool destroy_name) {
+    char *hash = terminal_hash(SYMBOL, name);
+    if (DEBUG) printf("ADD SYMBOL %s (%s) %ld %e (symbol hash: %s)\n", name, (is_literal ? "literal" : "non literal"), value_as_int, value_as_float, hash);
+    SYMBOL_BUFFER[SYMBOL_BUFFER_CURSOR].is_literal = is_literal;
+    SYMBOL_BUFFER[SYMBOL_BUFFER_CURSOR].value_as_int = value_as_int;
+    SYMBOL_BUFFER[SYMBOL_BUFFER_CURSOR].value_as_float = value_as_float;
+    SYMBOL_BUFFER[SYMBOL_BUFFER_CURSOR].hash = string_copy(hash);
+    SYMBOL_BUFFER[SYMBOL_BUFFER_CURSOR].name = string_copy(name);
+    SYMBOL_BUFFER_CURSOR++;
+    if (destroy_name) {
+        free(name);
+    }
+    if (SYMBOL_BUFFER_CURSOR == SYMBOL_BUFFER_SIZE) {
+        flush_expression_buffer();
+        flush_symbol_buffer();
+        flush_redis_commands();
+    }
+    return hash;
+}
+
 static char *add_expression(bool is_toplevel, struct HandleList composite) {
 
     if (DEBUG) printf("ADD EXPRESSION arity: %d (%s)\n", composite.size, (is_toplevel ? "toplevel" : "non toplevel"));
@@ -636,7 +641,7 @@ static char *add_expression(bool is_toplevel, struct HandleList composite) {
     EXPRESSION_BUFFER[EXPRESSION_BUFFER_CURSOR].composite = composite;
     EXPRESSION_BUFFER[EXPRESSION_BUFFER_CURSOR].hash = string_copy(hash);
     EXPRESSION_BUFFER_CURSOR++;
-    if (EXPRESSION_BUFFER_CURSOR == EXPRESSION_BUFFER_SIZE || SYMBOL_BUFFER_CURSOR == SYMBOL_BUFFER_SIZE) {
+    if (EXPRESSION_BUFFER_CURSOR == EXPRESSION_BUFFER_SIZE) {
         flush_expression_buffer();
         flush_symbol_buffer();
         flush_redis_commands();
