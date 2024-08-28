@@ -684,7 +684,7 @@ static char *add_typedef(char *typedef_mark, char *child, char *child_type, char
     composite.elements_type[1] = child_type;
     composite.elements_type[2] = parent_type;
 
-    add_link(METTA_TYPE, METTA_TYPE_HASH, child, child_type, parent, parent_type);
+    //add_link(METTA_TYPE, METTA_TYPE_HASH, child, child_type, parent, parent_type);
 
     return add_expression(true, composite);
 }
