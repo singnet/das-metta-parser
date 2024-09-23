@@ -11,6 +11,4 @@ echo "tests/data/gencode_nodes.metta" &&\
 echo "tests/data/gencode_edges.metta" &&\
 ./scripts/run.sh syntax_check ./tests/data/gencode_edges.metta &&\
 echo "tests/data/hocomoco_nodes.metta" &&\
-./scripts/run.sh syntax_check ./tests/data/hocomoco_nodes.metta &&\
-echo "" &&\
-echo "ALL UNIT TESTS OK"
+./scripts/run.sh syntax_check ./tests/data/hocomoco_nodes.metta
