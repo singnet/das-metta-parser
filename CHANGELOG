@@ -1,2 +1,3 @@
 [#qe231] Fixed bug in large-arity expressions
 [das/#89] [HOTFIX] Disabled MettaType links to avoid query errors on function typedefs
+[das/#106] Change patterns and templates indexes to store handles only rather than handles+targets

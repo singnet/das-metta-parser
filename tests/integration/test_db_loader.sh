@@ -9,6 +9,4 @@ echo "tests/data/type_defs.metta" &&\
 echo "tests/data/gencode_edges.metta" &&\
 ./scripts/run.sh db_loader ./tests/data/gencode_edges.metta&&\
 echo "tests/data/hocomoco_nodes.metta" &&\
-./scripts/run.sh db_loader ./tests/data/hocomoco_nodes.metta&&\
-echo "" &&\
-echo "ALL INTEGRATION TESTS OK"
+./scripts/run.sh db_loader ./tests/data/hocomoco_nodes.metta

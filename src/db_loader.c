@@ -378,11 +378,15 @@ static void add_redis_indexes(char *hash, struct HandleList *composite, char *co
     for (unsigned int j = 0; j < HASH_SIZE; j++) {
         VALUE_BUFFER[cursor++] = hash[j];
     }
+    /*
+    // Uncomment this block of code to store (handle, (handle, handle, ...)) as 'value' instead
+    // of just handle.
     for (unsigned int i = 0; i < composite->size; i++) {
         for (unsigned int j = 0; j < HASH_SIZE; j++) {
             VALUE_BUFFER[cursor++] = composite->elements[i][j];
         }
     }
+    */
     VALUE_BUFFER[cursor] = '\0';
 
     // Templates
@@ -472,6 +476,9 @@ static bson_t *build_expression_bson_document(char *hash, bool is_toplevel, stru
     return doc;
 }
 
+/*
+// The following function is commented out but it's not dead code. It's still unclear whether we'll
+// need it or not so we'll keep it in place for now.
 static void add_link(
         char *link_type, 
         char *link_type_hash, 
@@ -519,6 +526,7 @@ static void add_link(
     free(composite.elements_type);
     free(hash);
 }
+*/
 
 static int expression_cmp(const void *e1, const void *e2) {
     return strcmp(
