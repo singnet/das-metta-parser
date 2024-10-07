@@ -470,7 +470,7 @@ static bson_t *build_expression_bson_document(char *hash, bool is_toplevel, stru
     BSON_APPEND_UTF8(doc, "named_type_hash", named_type_hash);
     
     bson_t *targets_doc = bson_new();
-    for (unsigned int i = 0; i < (composite->size + 1); i++) {
+    for (unsigned int i = 0; i < composite->size; i++) {
         sprintf(count, "%d", i);
         BSON_APPEND_UTF8(targets_doc, count, composite->elements[i]);
     }
