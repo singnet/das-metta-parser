@@ -455,6 +455,7 @@ static bson_t *build_expression_bson_document(char *hash, bool is_toplevel, stru
     char *composite_type_hash = composite_hash(composite_type, composite->size + 1);
     BSON_APPEND_UTF8(doc, "composite_type_hash", composite_type_hash);
     BSON_APPEND_BOOL(doc, "is_toplevel", is_toplevel);
+    
     bson_t *composite_type_doc = bson_new();
     char count[8];
     for (unsigned int i = 0; i < (composite->size + 1); i++) {
@@ -464,13 +465,25 @@ static bson_t *build_expression_bson_document(char *hash, bool is_toplevel, stru
     BSON_APPEND_ARRAY(doc, "composite_type", composite_type_doc);
     free(composite_type);
     bson_destroy(composite_type_doc);
+
     BSON_APPEND_UTF8(doc, "named_type", named_type);
     BSON_APPEND_UTF8(doc, "named_type_hash", named_type_hash);
+    
+    bson_t *targets_doc = bson_new();
+    for (unsigned int i = 0; i < (composite->size + 1); i++) {
+        sprintf(count, "%d", i);
+        BSON_APPEND_UTF8(targets_doc, count, composite->elements[i]);
+    }
+    BSON_APPEND_ARRAY(doc, "targets", targets_doc);
+    bson_destroy(targets_doc);
+    
+    // this will be removed once we have everything working with the `targets` array above
     char key_tag[8];
     for (unsigned int i = 0; i < composite->size; i++) {
         sprintf(key_tag, "key_%d", i);
         BSON_APPEND_UTF8(doc, key_tag, composite->elements[i]);
     }
+
     add_redis_indexes(hash, composite, composite_type_hash);
     free(composite_type_hash);
     return doc;
