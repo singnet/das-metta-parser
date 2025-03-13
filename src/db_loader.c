@@ -12,6 +12,8 @@
 #include "action_util.h"
 #include "expression_hasher.h"
 
+#include "uthash.h"
+
 #include <unistd.h>
 
 #define DEBUG (0)
@@ -79,6 +81,14 @@ struct BufferedSymbol {
 };
 struct BufferedExpression EXPRESSION_BUFFER[EXPRESSION_BUFFER_SIZE];
 struct BufferedSymbol SYMBOL_BUFFER[SYMBOL_BUFFER_SIZE];
+
+typedef struct {
+    char *key;              // key
+    unsigned long score;    // score (value)
+    UT_hash_handle hh;      // make it hashable
+} HashMap;
+
+static HashMap *score_hash_map = NULL;
 
 // Reusable types and hashes
 static char *SYMBOL = "Symbol";
@@ -348,7 +358,27 @@ static void flush_symbol_buffer() {
 
 static void add_redis_pattern(char **composite_key, unsigned int arity, char *value) {
     char *key = expression_hash(EXPRESSION_HASH, composite_key, arity);
-    REDIS_APPEND_COMMAND_MACRO(REDIS, "SADD %s:%s %s", PATTERNS, key, value);
+
+    // Look up the key in the hash table
+    HashMap *entry;
+    HASH_FIND_STR(score_hash_map, key, entry);
+
+    // If key doesn't exist, initialize it with score = 0
+    unsigned int score = 0;
+    if (entry) {
+        score = entry->score;
+    } else {
+        entry = (HashMap *)malloc(sizeof(HashMap));
+        entry->key = strdup(key);
+        entry->score = 0;
+        HASH_ADD_KEYPTR(hh, score_hash_map, entry->key, strlen(entry->key), entry);
+    }
+
+    REDIS_APPEND_COMMAND_MACRO(REDIS, "ZADD %s:%s %ld %s", PATTERNS, key, score, value);
+
+    // Increment score and update hashmap
+    entry->score++;
+
     PENDING_REDIS_COMMANDS++;
     free(key);
 }
@@ -441,6 +471,15 @@ static void add_redis_indexes(char *hash, struct HandleList *composite, char *co
                add_redis_pattern(KEY_BUFFER, arity, VALUE_BUFFER);
             }
         default:
+    }
+}
+
+static void free_hash_map(void) {
+    HashMap *entry, *tmp;
+    HASH_ITER(hh, score_hash_map, entry, tmp) {
+        HASH_DEL(score_hash_map, entry);
+        free(entry->key);
+        free(entry);
     }
 }
 
@@ -760,6 +799,7 @@ void finalize_actions() {
     }
     REDIS_FREE_MACRO(REDIS);
     mongodb_destroy();
+    free_hash_map();
 
 #ifndef SUPPRESS_PROGRESS_BAR
     print_progress_bar(INPUT_LINE_COUNT, INPUT_LINE_COUNT, 1, 1, true);
