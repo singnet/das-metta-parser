@@ -369,7 +369,7 @@ static void add_redis_pattern(char **composite_key, unsigned int arity, char *va
         score = entry->score;
     } else {
         entry = (HashMap *)malloc(sizeof(HashMap));
-        entry->key = strdup(key);
+        entry->key = key;
         entry->score = 0;
         HASH_ADD_KEYPTR(hh, score_hash_map, entry->key, strlen(entry->key), entry);
     }
@@ -380,7 +380,6 @@ static void add_redis_pattern(char **composite_key, unsigned int arity, char *va
     entry->score++;
 
     PENDING_REDIS_COMMANDS++;
-    free(key);
 }
 
 static void add_redis_indexes(char *hash, struct HandleList *composite, char *composite_type_hash) {
