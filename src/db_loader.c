@@ -36,12 +36,14 @@ static bson_t *MONGODB_INSERT_MANY_OPTIONS = NULL;
 
 // Redis reusable globals
 #ifdef DB_LOADER_USE_REDIS_CLUSTER
+#define REDIS_COMMAND_MACRO redisClusterCommand
 #define REDIS_APPEND_COMMAND_MACRO redisClusterAppendCommand
 #define REDIS_APPEND_COMMAND_ARGV_MACRO redisClusterAppendCommandArgv
 #define REDIS_GET_REPLY_MACRO redisClusterGetReply
 #define REDIS_FREE_MACRO redisClusterFree
 #define REDIS_CONTEXT_MACRO redisClusterContext
 #else
+#define REDIS_COMMAND_MACRO redisCommand
 #define REDIS_APPEND_COMMAND_MACRO redisAppendCommand
 #define REDIS_APPEND_COMMAND_ARGV_MACRO redisAppendCommandArgv
 #define REDIS_GET_REPLY_MACRO redisGetReply
@@ -53,6 +55,7 @@ static unsigned int HASH_SIZE = 0;
 static unsigned int MAX_INDEXABLE_ARITY = 4;
 static unsigned int MAX_ARITY = 100;
 static unsigned int PENDING_REDIS_COMMANDS = 0;
+static unsigned long PATTERNS_SCORE = 0;
 static char WILDCARD[] = "*";
 static char **KEY_BUFFER = NULL;
 static char *VALUE_BUFFER = NULL;
@@ -61,6 +64,7 @@ static char OUTGOING_SET[] = "outgoing_set";
 static char INCOMING_SET[] = "incoming_set";
 static char TEMPLATES[] = "templates";
 static char PATTERNS[] = "patterns";
+static char PATTERNS_NEXT_SCORE[] = "patterns:next_score";
 
 // Atom insertion buffers
 #define EXPRESSION_BUFFER_SIZE ((unsigned int) 100000)
@@ -179,6 +183,29 @@ static void mongodb_setup() {
     BSON_APPEND_BOOL(MONGODB_INSERT_MANY_OPTIONS, "bypassDocumentValidation", true);
 }
 
+unsigned long get_next_score() {
+    redisReply *reply = REDIS_COMMAND_MACRO(REDIS, "GET %s", PATTERNS_NEXT_SCORE);
+    if (!reply || reply->type == REDIS_REPLY_NIL || reply->type != REDIS_REPLY_STRING) {
+        if (DEBUG) fprintf(stdout, "get_next_score() failed: unexpected reply\n");
+        freeReplyObject(reply);
+        return 0;
+    }
+    unsigned long score = atol(reply->str);
+    freeReplyObject(reply);
+    return score;
+}
+
+bool set_next_score() {
+    redisReply *reply = REDIS_COMMAND_MACRO(REDIS, "SET %s %ld", PATTERNS_NEXT_SCORE, PATTERNS_SCORE);
+    if (!reply) {
+        fprintf(stdout, "set_next_score() failed: unexpected reply\n");
+        freeReplyObject(reply);
+        return false;
+    }
+    freeReplyObject(reply);
+    return true;
+}
+
 static void redis_setup() {
 
     char *host = getenv("DAS_REDIS_HOSTNAME");
@@ -209,6 +236,8 @@ static void redis_setup() {
     HASH_SIZE = strlen(SYMBOL_HASH);
     KEY_BUFFER = (char **) malloc(MAX_INDEXABLE_ARITY * sizeof(char *));
     VALUE_BUFFER = (char *) malloc(((HASH_SIZE * (MAX_ARITY + 1)) + 1) * sizeof(char));
+    // Fetch highest score (0 if doesn't exist)
+    PATTERNS_SCORE = get_next_score();
 }
 
 static struct HandleList build_handle_list(char *element, char *element_type) {
@@ -296,6 +325,7 @@ static void flush_redis_commands() {
         }
     }
     PENDING_REDIS_COMMANDS = 0;
+    set_next_score();
 }
 
 static void flush_symbol_buffer() {
@@ -358,27 +388,8 @@ static void flush_symbol_buffer() {
 
 static void add_redis_pattern(char **composite_key, unsigned int arity, char *value) {
     char *key = expression_hash(EXPRESSION_HASH, composite_key, arity);
-
-    // Look up the key in the hash table
-    HashMap *entry;
-    HASH_FIND_STR(score_hash_map, key, entry);
-
-    // If key doesn't exist, initialize it with score = 0
-    unsigned int score = 0;
-    if (entry) {
-        score = entry->score;
-    } else {
-        entry = (HashMap *)malloc(sizeof(HashMap));
-        entry->key = key;
-        entry->score = 0;
-        HASH_ADD_KEYPTR(hh, score_hash_map, entry->key, strlen(entry->key), entry);
-    }
-
-    REDIS_APPEND_COMMAND_MACRO(REDIS, "ZADD %s:%s %ld %s", PATTERNS, key, score, value);
-
-    // Increment score and update hashmap
-    entry->score++;
-
+    REDIS_APPEND_COMMAND_MACRO(REDIS, "ZADD %s:%s %ld %s", PATTERNS, key, PATTERNS_SCORE, value);
+    PATTERNS_SCORE++;
     PENDING_REDIS_COMMANDS++;
 }
 
