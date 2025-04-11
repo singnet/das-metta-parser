@@ -381,6 +381,7 @@ static void add_redis_pattern(char **composite_key, unsigned int arity, char *va
     REDIS_APPEND_COMMAND_MACRO(REDIS, "ZADD %s:%s %ld %s", PATTERNS, key, PATTERNS_SCORE, value);
     PATTERNS_SCORE++;
     PENDING_REDIS_COMMANDS++;
+    free(key);
 }
 
 static void add_redis_indexes(char *hash, struct HandleList *composite, char *composite_type_hash) {
