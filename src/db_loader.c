@@ -12,8 +12,6 @@
 #include "action_util.h"
 #include "expression_hasher.h"
 
-#include "uthash.h"
-
 #include <unistd.h>
 
 #define DEBUG (0)
@@ -85,14 +83,6 @@ struct BufferedSymbol {
 };
 struct BufferedExpression EXPRESSION_BUFFER[EXPRESSION_BUFFER_SIZE];
 struct BufferedSymbol SYMBOL_BUFFER[SYMBOL_BUFFER_SIZE];
-
-typedef struct {
-    char *key;              // key
-    unsigned long score;    // score (value)
-    UT_hash_handle hh;      // make it hashable
-} HashMap;
-
-static HashMap *score_hash_map = NULL;
 
 // Reusable types and hashes
 static char *SYMBOL = "Symbol";
@@ -484,15 +474,6 @@ static void add_redis_indexes(char *hash, struct HandleList *composite, char *co
     }
 }
 
-static void free_hash_map(void) {
-    HashMap *entry, *tmp;
-    HASH_ITER(hh, score_hash_map, entry, tmp) {
-        HASH_DEL(score_hash_map, entry);
-        free(entry->key);
-        free(entry);
-    }
-}
-
 static bson_t *build_expression_bson_document(char *hash, bool is_toplevel, struct HandleList *composite, char *named_type, char *named_type_hash) {
     bson_t *doc = bson_new();
     char **composite_type = (char **) malloc((composite->size + 1) * sizeof(char *));
@@ -809,7 +790,6 @@ void finalize_actions() {
     }
     REDIS_FREE_MACRO(REDIS);
     mongodb_destroy();
-    free_hash_map();
 
 #ifndef SUPPRESS_PROGRESS_BAR
     print_progress_bar(INPUT_LINE_COUNT, INPUT_LINE_COUNT, 1, 1, true);
