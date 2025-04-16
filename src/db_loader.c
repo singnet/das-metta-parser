@@ -57,10 +57,10 @@ static unsigned long PATTERNS_SCORE = 0;
 static char WILDCARD[] = "*";
 static char **KEY_BUFFER = NULL;
 static char *VALUE_BUFFER = NULL;
-static char NAMED_ENTITIES[] = "names";
+// static char NAMED_ENTITIES[] = "names";
 static char OUTGOING_SET[] = "outgoing_set";
-static char INCOMING_SET[] = "incoming_set";
-static char TEMPLATES[] = "templates";
+// static char INCOMING_SET[] = "incoming_set";
+// static char TEMPLATES[] = "templates";
 static char PATTERNS[] = "patterns";
 static char PATTERNS_NEXT_SCORE[] = "patterns:next_score";
 
@@ -347,8 +347,8 @@ static void flush_symbol_buffer() {
 
     bson_t **bulk_insertion_buffer = (bson_t **) malloc(new_size * sizeof(bson_t *));
     for (unsigned int i = 0; i < new_size; i++) {
-        REDIS_APPEND_COMMAND_MACRO(REDIS, "SET %s:%s %s" , NAMED_ENTITIES, SYMBOL_BUFFER[i].hash, SYMBOL_BUFFER[i].name);
-        PENDING_REDIS_COMMANDS++;
+        // REDIS_APPEND_COMMAND_MACRO(REDIS, "SET %s:%s %s" , NAMED_ENTITIES, SYMBOL_BUFFER[i].hash, SYMBOL_BUFFER[i].name);
+        // PENDING_REDIS_COMMANDS++;
         bulk_insertion_buffer[i] = build_symbol_bson_document(
                 SYMBOL_BUFFER[i].hash,
                 SYMBOL_BUFFER[i].name,
@@ -376,7 +376,22 @@ static void flush_symbol_buffer() {
 #endif
 }
 
+static bool patterns_keys_to_ignore(char **composite_key) {
+    if (
+        // if (* ...) or not EVALUATION, PREDICATE or CONCEPT
+        strcmp(composite_key[0], "*") == 0 || (
+            strcmp(composite_key[0], "65f7f5dc1ea214486e7cbe8254c0e3dc") != 0 &&
+            strcmp(composite_key[0], "9521638da5eb926fccddfbfd4fb1d060") != 0 &&
+            strcmp(composite_key[0], "c28512d242fb830dd0f52fe36010e502") != 0
+        )
+    ) {
+        return true;
+    }
+    return false;
+}
+
 static void add_redis_pattern(char **composite_key, unsigned int arity, char *value) {
+    if (patterns_keys_to_ignore(composite_key)) { return; }
     char *key = expression_hash(EXPRESSION_HASH, composite_key, arity);
     REDIS_APPEND_COMMAND_MACRO(REDIS, "ZADD %s:%s %ld %s", PATTERNS, key, PATTERNS_SCORE, value);
     PATTERNS_SCORE++;
@@ -397,8 +412,8 @@ static void add_redis_indexes(char *hash, struct HandleList *composite, char *co
         for (unsigned int j = 0; j < HASH_SIZE; j++) {
             VALUE_BUFFER[cursor++] = composite->elements[i][j];
         }
-        REDIS_APPEND_COMMAND_MACRO(REDIS, "SADD %s:%s %s", INCOMING_SET, composite->elements[i], hash);
-        PENDING_REDIS_COMMANDS++;
+        // REDIS_APPEND_COMMAND_MACRO(REDIS, "SADD %s:%s %s", INCOMING_SET, composite->elements[i], hash);
+        // PENDING_REDIS_COMMANDS++;
     }
     VALUE_BUFFER[cursor] = '\0';
     REDIS_APPEND_COMMAND_MACRO(REDIS, "SET %s:%s %s", OUTGOING_SET, hash, VALUE_BUFFER);
@@ -422,8 +437,8 @@ static void add_redis_indexes(char *hash, struct HandleList *composite, char *co
 
     // Templates
     //printf("\tADD TEMPLATE: %s <%s>\n", composite_type_hash, VALUE_BUFFER);
-    REDIS_APPEND_COMMAND_MACRO(REDIS, "SADD %s:%s %s", TEMPLATES, composite_type_hash, VALUE_BUFFER);
-    PENDING_REDIS_COMMANDS++;
+    // REDIS_APPEND_COMMAND_MACRO(REDIS, "SADD %s:%s %s", TEMPLATES, composite_type_hash, VALUE_BUFFER);
+    // PENDING_REDIS_COMMANDS++;
 
     // Patterns
     if (arity > MAX_INDEXABLE_ARITY) {
