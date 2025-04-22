@@ -2,11 +2,11 @@
 
 DIR=`dirname $2`
 FILE=`basename $2`
-CONTAINER_NAME="das-metta-parser-run"
+# CONTAINER_NAME="das-metta-parser-run"
 
 docker run \
     --net="host" \
-    --name=$CONTAINER_NAME \
+    # --name=$CONTAINER_NAME \
     --env DAS_REDIS_HOSTNAME=$DAS_REDIS_HOSTNAME \
     --env DAS_REDIS_PORT=$DAS_REDIS_PORT \
     --env DAS_MONGODB_HOSTNAME=$DAS_MONGODB_HOSTNAME \
@@ -19,4 +19,4 @@ docker run \
     bin/$1 /opt/data/$FILE
 
 sleep 1
-docker rm $CONTAINER_NAME >& /dev/null
+# docker rm $CONTAINER_NAME >& /dev/null
