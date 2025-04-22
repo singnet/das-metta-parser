@@ -13,7 +13,7 @@ docker run \
     --env DAS_MONGODB_PASSWORD=$DAS_MONGODB_PASSWORD \
     --volume $DIR:/opt/data \
     --volume .:/opt/das-metta-parser \
-    -it das-metta-parser-builder \
+    das-metta-parser-builder \
     bin/$1 /opt/data/$FILE
 
 sleep 1
