@@ -200,6 +200,10 @@ static void redis_setup() {
 
     char *host = getenv("DAS_REDIS_HOSTNAME");
     char *port = getenv("DAS_REDIS_PORT");
+    char *host_2 = getenv("DAS_REDIS_HOSTNAME_2");
+    char *port_2 = getenv("DAS_REDIS_PORT_2");
+    char *host_3 = getenv("DAS_REDIS_HOSTNAME_3");
+    char *port_3 = getenv("DAS_REDIS_PORT_3");
 
     if (host == NULL || port == NULL) {
         fprintf(stderr, "You need to set Redis access info as environment variables\n");
@@ -211,6 +215,36 @@ static void redis_setup() {
     sprintf(redis_address, "%s:%s", host, port);
     REDIS = redisClusterConnect(redis_address, 0);
     free(redis_address);
+    // fprintf(stdout, "here2");
+    // char *addr1 = (char *) malloc((strlen(host) + strlen(port) + 2) * sizeof(char));
+    // char *addr2 = (char *) malloc((strlen(host) + strlen(port) + 2) * sizeof(char));
+    // char *addr3 = (char *) malloc((strlen(host) + strlen(port) + 2) * sizeof(char));
+    
+    // sprintf(addr1, "%s:%s", host,  port);
+    // sprintf(addr2, "%s:%s", host_2, port_2);
+    // sprintf(addr3, "%s:%s", host_3, port_3);
+
+    // size_t all_len = strlen(addr1) + 1 + strlen(addr2) + 1 + strlen(addr3) + 1;
+    // char *redis_address = (char *) malloc(all_len);
+    // sprintf(redis_address, "%s,%s,%s", addr1, addr2, addr3);
+       
+    // redisClusterContext *cc = redisClusterContextInit();
+    // redisClusterSetOptionAddNodes(cc, redis_address);
+    // redisClusterSetOptionRouteUseSlots(cc);
+    // if (redisClusterConnect2(cc) != REDIS_OK) {
+    //     fprintf(stderr, "Error connecting: %s\n", cc->errstr);
+    //     redisClusterFree(cc);
+    //     exit(1);
+    // }
+    
+    // REDIS = cc;
+    
+    // free(redis_address);
+    // free(addr1);
+    // free(addr2);
+    // free(addr3);
+
+    // fprintf(stdout, "here3");
 #else
     REDIS = redisConnect(host, atoi(port));
 #endif
@@ -309,9 +343,19 @@ static bson_t *build_symbol_bson_document(char *hash, char *name, bool is_litera
 }
 
 static void flush_redis_commands() {
+    // for (unsigned int i = 0; i < PENDING_REDIS_COMMANDS; i++) {
+    //     if (REDIS_GET_REPLY_MACRO(REDIS, NULL) != REDIS_OK) {
+    //         fprintf(stderr, "REDIS ERROR\n");
+    //     }
+    // }
+    redisReply *reply;
     for (unsigned int i = 0; i < PENDING_REDIS_COMMANDS; i++) {
-        if (REDIS_GET_REPLY_MACRO(REDIS, NULL) != REDIS_OK) {
-            fprintf(stderr, "REDIS ERROR\n");
+        reply = NULL;
+        if (REDIS_GET_REPLY_MACRO(REDIS, &reply) != REDIS_OK) {
+            fprintf(stderr, "[ERR] Connection/Protocol Failure: %s\n", REDIS->errstr);
+        } 
+        else if (reply->type == REDIS_REPLY_ERROR) {
+            fprintf(stderr, "[ERR] Redis error: %s\n", reply->str);
         }
     }
     PENDING_REDIS_COMMANDS = 0;
