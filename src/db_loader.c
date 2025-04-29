@@ -215,7 +215,7 @@ static void redis_setup() {
     sprintf(redis_address, "%s:%s", host, port);
     REDIS = redisClusterConnect(redis_address, 0);
     free(redis_address);
-    // fprintf(stdout, "here2");
+
     // char *addr1 = (char *) malloc((strlen(host) + strlen(port) + 2) * sizeof(char));
     // char *addr2 = (char *) malloc((strlen(host) + strlen(port) + 2) * sizeof(char));
     // char *addr3 = (char *) malloc((strlen(host) + strlen(port) + 2) * sizeof(char));
@@ -244,7 +244,6 @@ static void redis_setup() {
     // free(addr2);
     // free(addr3);
 
-    // fprintf(stdout, "here3");
 #else
     REDIS = redisConnect(host, atoi(port));
 #endif
@@ -358,6 +357,7 @@ static void flush_redis_commands() {
             fprintf(stderr, "[ERR] Redis error: %s\n", reply->str);
         }
     }
+    freeReplyObject(reply);
     PENDING_REDIS_COMMANDS = 0;
     set_next_score();
 }
