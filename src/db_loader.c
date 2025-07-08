@@ -26,7 +26,8 @@ extern struct HandleList EMPTY_HANDLE_LIST;
 static mongoc_database_t *MONGODB = NULL;
 static mongoc_client_t *MONGODB_CLIENT = NULL;
 static mongoc_collection_t *MONGODB_TYPES= NULL;
-static mongoc_collection_t *MONGODB_ATOMS= NULL;
+static mongoc_collection_t *MONGODB_NODES= NULL;
+static mongoc_collection_t *MONGODB_LINKS= NULL;
 static bson_t MONGODB_REPLY = BSON_INITIALIZER;
 static bson_error_t MONGODB_ERROR = {0};
 static bson_t *MONGODB_REPLACE_OPTIONS = NULL;
@@ -125,7 +126,8 @@ static void mongodb_destroy() {
     mongoc_database_destroy(MONGODB);
     mongoc_client_destroy(MONGODB_CLIENT);
     mongoc_collection_destroy(MONGODB_TYPES);
-    mongoc_collection_destroy(MONGODB_ATOMS);
+    mongoc_collection_destroy(MONGODB_NODES);
+    mongoc_collection_destroy(MONGODB_LINKS);
     bson_destroy(&MONGODB_REPLY);
     bson_destroy(MONGODB_REPLACE_OPTIONS);
     bson_destroy(MONGODB_INSERT_MANY_OPTIONS);
@@ -164,7 +166,8 @@ static void mongodb_setup() {
         mongodb_error("Failed to create a MongoDB client.");
     }
     MONGODB_TYPES = mongoc_client_get_collection(MONGODB_CLIENT, "das", "atom_types");
-    MONGODB_ATOMS = mongoc_client_get_collection(MONGODB_CLIENT, "das", "atoms");
+    MONGODB_NODES = mongoc_client_get_collection(MONGODB_CLIENT, "das", "nodes");
+    MONGODB_LINKS = mongoc_client_get_collection(MONGODB_CLIENT, "das", "links");
 
     MONGODB_REPLACE_OPTIONS = bson_new();
     BSON_APPEND_BOOL(MONGODB_REPLACE_OPTIONS, "upsert", true);
@@ -357,7 +360,7 @@ static void flush_symbol_buffer() {
                 SYMBOL_BUFFER[i].value_as_float);
     }
     bool mongo_ok = mongoc_collection_insert_many(
-            MONGODB_ATOMS,
+            MONGODB_NODES,
             (const bson_t **) bulk_insertion_buffer,
             new_size,
             MONGODB_INSERT_MANY_OPTIONS,
@@ -644,7 +647,7 @@ static void flush_expression_buffer() {
     }
 
     bool mongodb_ok = mongoc_collection_insert_many(
-            MONGODB_ATOMS,
+            MONGODB_LINKS,
             (const bson_t **) bulk_insertion_buffer,
             new_size,
             MONGODB_INSERT_MANY_OPTIONS,
