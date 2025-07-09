@@ -55,12 +55,14 @@ static unsigned int MAX_INDEXABLE_ARITY = 4;
 static unsigned int MAX_ARITY = 100;
 static unsigned int PENDING_REDIS_COMMANDS = 0;
 static unsigned long PATTERNS_SCORE = 0;
+static unsigned long INCOMING_SET_SCORE = 0;
 static char WILDCARD[] = "*";
 static char **KEY_BUFFER = NULL;
 static char *VALUE_BUFFER = NULL;
 static char NAMED_ENTITIES[] = "names";
 static char OUTGOING_SET[] = "outgoing_set";
 static char INCOMING_SET[] = "incoming_set";
+static char INCOMING_SET_NEXT_SCORE[] = "incoming_set:next_score";
 static char TEMPLATES[] = "templates";
 static char PATTERNS[] = "patterns";
 static char PATTERNS_NEXT_SCORE[] = "patterns:next_score";
@@ -176,8 +178,8 @@ static void mongodb_setup() {
     BSON_APPEND_BOOL(MONGODB_INSERT_MANY_OPTIONS, "bypassDocumentValidation", true);
 }
 
-unsigned long get_next_score() {
-    redisReply *reply = REDIS_COMMAND_MACRO(REDIS, "GET %s", PATTERNS_NEXT_SCORE);
+unsigned long get_next_score(char* key) {
+    redisReply *reply = REDIS_COMMAND_MACRO(REDIS, "GET %s", key);
     if (!reply || reply->type == REDIS_REPLY_NIL || reply->type != REDIS_REPLY_STRING) {
         if (DEBUG) fprintf(stdout, "get_next_score() failed: unexpected reply\n");
         freeReplyObject(reply);
@@ -188,8 +190,8 @@ unsigned long get_next_score() {
     return score;
 }
 
-bool set_next_score() {
-    redisReply *reply = REDIS_COMMAND_MACRO(REDIS, "SET %s %ld", PATTERNS_NEXT_SCORE, PATTERNS_SCORE);
+bool set_next_score(char* key, unsigned long value) {
+    redisReply *reply = REDIS_COMMAND_MACRO(REDIS, "SET %s %ld", key, value);
     if (!reply) {
         fprintf(stdout, "set_next_score() failed: unexpected reply\n");
         freeReplyObject(reply);
@@ -230,7 +232,8 @@ static void redis_setup() {
     KEY_BUFFER = (char **) malloc(MAX_INDEXABLE_ARITY * sizeof(char *));
     VALUE_BUFFER = (char *) malloc(((HASH_SIZE * (MAX_ARITY + 1)) + 1) * sizeof(char));
     // Fetch highest score (0 if doesn't exist)
-    PATTERNS_SCORE = get_next_score();
+    PATTERNS_SCORE = get_next_score(PATTERNS_NEXT_SCORE);
+    INCOMING_SET_SCORE = get_next_score(INCOMING_SET_NEXT_SCORE);
 }
 
 static struct HandleList build_handle_list(char *element, char *element_type) {
@@ -318,7 +321,8 @@ static void flush_redis_commands() {
         }
     }
     PENDING_REDIS_COMMANDS = 0;
-    set_next_score();
+    set_next_score(PATTERNS_NEXT_SCORE, PATTERNS_SCORE);
+    set_next_score(INCOMING_SET_NEXT_SCORE, INCOMING_SET_SCORE);
 }
 
 static void flush_symbol_buffer() {
@@ -400,7 +404,8 @@ static void add_redis_indexes(char *hash, struct HandleList *composite, char *co
         for (unsigned int j = 0; j < HASH_SIZE; j++) {
             VALUE_BUFFER[cursor++] = composite->elements[i][j];
         }
-        REDIS_APPEND_COMMAND_MACRO(REDIS, "SADD %s:%s %s", INCOMING_SET, composite->elements[i], hash);
+        REDIS_APPEND_COMMAND_MACRO(REDIS, "ZADD %s:%s %ld %s", INCOMING_SET, composite->elements[i], INCOMING_SET_SCORE, hash);
+        INCOMING_SET_SCORE++;
         PENDING_REDIS_COMMANDS++;
     }
     VALUE_BUFFER[cursor] = '\0';
