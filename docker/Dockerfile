@@ -26,7 +26,6 @@ RUN cd /tmp &&\
     echo "/usr/local/lib" > /etc/ld.so.conf.d/local.conf &&\
     ldconfig
 
-RUN pip3 install hyperon-das
 ENV C_INCLUDE_PATH=/usr/include/libmongoc-1.0:/usr/include/libbson-1.0
 RUN mkdir /opt/data
 RUN mkdir /opt/das-metta-parser
