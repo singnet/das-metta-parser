@@ -30,8 +30,6 @@ RUN cd /tmp &&\
     echo "/usr/local/lib" > /etc/ld.so.conf.d/local.conf &&\
     ldconfig
 
-RUN pip3 install hyperon-das
-
 WORKDIR /opt/das-metta-parser
 
 RUN mkdir ../bin
