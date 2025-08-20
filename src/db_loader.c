@@ -57,7 +57,6 @@ static unsigned int MAX_ARITY = 100;
 static unsigned int PENDING_REDIS_COMMANDS = 0;
 static unsigned long PATTERNS_SCORE = 0;
 static unsigned long INCOMING_SET_SCORE = 0;
-static unsigned int HIGHEST_ARITY = 0;
 static char WILDCARD[] = "*";
 static char **KEY_BUFFER = NULL;
 static char *VALUE_BUFFER = NULL;
@@ -411,63 +410,52 @@ static bson_t *index_entries_combinations(unsigned int arity) {
     return index_entries_doc;
 }
 
-static void add_pattern_index_schema(unsigned int max_arity) {
-    if (max_arity < 2) {
-        if (DEBUG) fprintf(stdout, "Skipping pattern index schema insertion as arity %d is less than 2\n", max_arity);
+static void add_pattern_index_schema(unsigned int arity, unsigned int priority) {
+    if (arity < 2) {
+        if (DEBUG) fprintf(stdout, "Skipping pattern index schema insertion as arity %d is less than 2\n", arity);
         return;
     }
-    if (DEBUG) fprintf(stdout, "Adding pattern index schema for arity %d\n", max_arity);
+    if (DEBUG) fprintf(stdout, "Adding pattern index schema for arity %d\n", arity);
     char *tokens = (char *) malloc(128 * sizeof(char));
 
-    unsigned int bulk_idx = 0;
-    unsigned int bulk_size = max_arity - 1;
-    bson_t **bulk_insertion_buffer = (bson_t **) malloc(bulk_size * sizeof(bson_t *));
-
-    for (unsigned int arity = 2; arity <= max_arity; arity++) {
-        sprintf(tokens, "LINK_TEMPLATE Expression %d", arity);
-        for (unsigned int i = 1; i <= arity; i++) {
-            char temp_buffer[128];
-            snprintf(temp_buffer, sizeof(temp_buffer), "%s VARIABLE v%d", tokens, i);
-            strcpy(tokens, temp_buffer);
-        }
-
-        bson_t *doc = bson_new();
-
-        char **elements = (char **) malloc(arity * sizeof(char *));
-        for (unsigned int i = 0; i < arity; i++) {
-            elements[i] = WILDCARD;
-        }
-        char *hash = expression_hash(EXPRESSION_HASH, elements, arity);
-        free(elements);
-
-        BSON_APPEND_UTF8(doc, "_id", hash);
-        free(hash);
-
-        BSON_APPEND_UTF8(doc, "tokens", tokens);
-
-        bson_t *index_entries_doc = index_entries_combinations(arity);
-        BSON_APPEND_ARRAY(doc, "index_entries", index_entries_doc);
-        bson_destroy(index_entries_doc);
-
-        bulk_insertion_buffer[bulk_idx++] = doc;
+    sprintf(tokens, "LINK_TEMPLATE Expression %d", arity);
+    for (unsigned int i = 1; i <= arity; i++) {
+        char temp_buffer[128];
+        snprintf(temp_buffer, sizeof(temp_buffer), "%s VARIABLE v%d", tokens, i);
+        strcpy(tokens, temp_buffer);
     }
 
-    bool mongo_ok = mongoc_collection_insert_many(
-            MONGODB_PATTERN_INDEX_SCHEMA,
-            (const bson_t **) bulk_insertion_buffer,
-            bulk_size,
-            MONGODB_INSERT_MANY_OPTIONS,
-            NULL,
-            &MONGODB_ERROR);
+    bson_t *doc = bson_new();
+
+    char **elements = (char **) malloc(arity * sizeof(char *));
+    for (unsigned int i = 0; i < arity; i++) {
+        elements[i] = WILDCARD;
+    }
+    char *hash = expression_hash(EXPRESSION_HASH, elements, arity);
+    free(elements);
+
+    BSON_APPEND_UTF8(doc, "_id", hash);
+    free(hash);
+
+    BSON_APPEND_UTF8(doc, "tokens", tokens);
+    BSON_APPEND_INT32(doc, "priority", priority);
+
+    bson_t *index_entries_doc = index_entries_combinations(arity);
+    BSON_APPEND_ARRAY(doc, "index_entries", index_entries_doc);
+    bson_destroy(index_entries_doc);
+
+    bool mongo_ok = mongoc_collection_insert_one(
+        MONGODB_PATTERN_INDEX_SCHEMA,
+        doc,
+        NULL,
+        NULL,
+        &MONGODB_ERROR);
 
     if (DEBUG && !mongo_ok) {
         mongodb_error((char *) &MONGODB_ERROR.message);
     }
 
-    for (unsigned int i = 0; i < bulk_size; i++) {
-        bson_destroy(bulk_insertion_buffer[i]);
-    }
-    free(bulk_insertion_buffer);
+    bson_destroy(doc);
     free(tokens);
 }
 
@@ -524,10 +512,6 @@ static void add_redis_indexes(char *hash, struct HandleList *composite, char *co
     // Patterns
     if (arity > MAX_INDEXABLE_ARITY) {
         return;
-    }
-
-    if (HIGHEST_ARITY < arity) {
-        HIGHEST_ARITY = arity;
     }
 
     switch (arity) {
@@ -892,7 +876,12 @@ void finalize_actions() {
     }
     REDIS_FREE_MACRO(REDIS);
 
-    add_pattern_index_schema(HIGHEST_ARITY);
+    // Less common arity
+    add_pattern_index_schema(4, 1);
+    add_pattern_index_schema(2, 2);
+    // Most common arity
+    add_pattern_index_schema(3, 3);
+
     mongodb_destroy();
 
 #ifndef SUPPRESS_PROGRESS_BAR
