@@ -28,6 +28,7 @@ static mongoc_client_t *MONGODB_CLIENT = NULL;
 static mongoc_collection_t *MONGODB_TYPES= NULL;
 static mongoc_collection_t *MONGODB_NODES= NULL;
 static mongoc_collection_t *MONGODB_LINKS= NULL;
+static mongoc_collection_t *MONGODB_PATTERN_INDEX_SCHEMA= NULL;
 static bson_t MONGODB_REPLY = BSON_INITIALIZER;
 static bson_error_t MONGODB_ERROR = {0};
 static bson_t *MONGODB_REPLACE_OPTIONS = NULL;
@@ -56,6 +57,7 @@ static unsigned int MAX_ARITY = 100;
 static unsigned int PENDING_REDIS_COMMANDS = 0;
 static unsigned long PATTERNS_SCORE = 0;
 static unsigned long INCOMING_SET_SCORE = 0;
+static unsigned int HIGHEST_ARITY = 0;
 static char WILDCARD[] = "*";
 static char **KEY_BUFFER = NULL;
 static char *VALUE_BUFFER = NULL;
@@ -130,6 +132,7 @@ static void mongodb_destroy() {
     mongoc_collection_destroy(MONGODB_TYPES);
     mongoc_collection_destroy(MONGODB_NODES);
     mongoc_collection_destroy(MONGODB_LINKS);
+    mongoc_collection_destroy(MONGODB_PATTERN_INDEX_SCHEMA);
     bson_destroy(&MONGODB_REPLY);
     bson_destroy(MONGODB_REPLACE_OPTIONS);
     bson_destroy(MONGODB_INSERT_MANY_OPTIONS);
@@ -170,6 +173,7 @@ static void mongodb_setup() {
     MONGODB_TYPES = mongoc_client_get_collection(MONGODB_CLIENT, "das", "atom_types");
     MONGODB_NODES = mongoc_client_get_collection(MONGODB_CLIENT, "das", "nodes");
     MONGODB_LINKS = mongoc_client_get_collection(MONGODB_CLIENT, "das", "links");
+    MONGODB_PATTERN_INDEX_SCHEMA = mongoc_client_get_collection(MONGODB_CLIENT, "das", "pattern_index_schema");
 
     MONGODB_REPLACE_OPTIONS = bson_new();
     BSON_APPEND_BOOL(MONGODB_REPLACE_OPTIONS, "upsert", true);
@@ -383,6 +387,90 @@ static void flush_symbol_buffer() {
 #endif
 }
 
+// Combination of "vX" and "*" for a given arity
+static bson_t *index_entries_combinations(unsigned int arity) {
+    unsigned int total = 1 << arity;  // 2^arity
+
+    bson_t *index_entries_doc = bson_new();
+
+    for (unsigned int mask = 0; mask < total; ++mask) {
+        bson_t *index_entry = bson_new();
+        for (unsigned int i = 0; i < arity; ++i) {
+            if (mask & (1 << i))
+                BSON_APPEND_UTF8(index_entry, "0", "*");
+            else {
+                char buf[20];
+                sprintf(buf, "v%u", i + 1);
+                BSON_APPEND_UTF8(index_entry, "0", buf);
+            }
+        }
+        BSON_APPEND_ARRAY(index_entries_doc, "0", index_entry);
+        bson_destroy(index_entry);
+    }
+
+    return index_entries_doc;
+}
+
+static void add_pattern_index_schema(unsigned int max_arity) {
+    if (max_arity < 2) {
+        if (DEBUG) fprintf(stdout, "Skipping pattern index schema insertion as arity %d is less than 2\n", max_arity);
+        return;
+    }
+    if (DEBUG) fprintf(stdout, "Adding pattern index schema for arity %d\n", max_arity);
+    char *tokens = (char *) malloc(128 * sizeof(char));
+
+    unsigned int bulk_idx = 0;
+    unsigned int bulk_size = max_arity - 1;
+    bson_t **bulk_insertion_buffer = (bson_t **) malloc(bulk_size * sizeof(bson_t *));
+
+    for (unsigned int arity = 2; arity <= max_arity; arity++) {
+        sprintf(tokens, "LINK_TEMPLATE Expression %d", arity);
+        for (unsigned int i = 1; i <= arity; i++) {
+            char temp_buffer[128];
+            snprintf(temp_buffer, sizeof(temp_buffer), "%s VARIABLE v%d", tokens, i);
+            strcpy(tokens, temp_buffer);
+        }
+
+        bson_t *doc = bson_new();
+
+        char **elements = (char **) malloc(arity * sizeof(char *));
+        for (unsigned int i = 0; i < arity; i++) {
+            elements[i] = WILDCARD;
+        }
+        char *hash = expression_hash(EXPRESSION_HASH, elements, arity);
+        free(elements);
+
+        BSON_APPEND_UTF8(doc, "_id", hash);
+        free(hash);
+
+        BSON_APPEND_UTF8(doc, "tokens", tokens);
+
+        bson_t *index_entries_doc = index_entries_combinations(arity);
+        BSON_APPEND_ARRAY(doc, "index_entries", index_entries_doc);
+        bson_destroy(index_entries_doc);
+
+        bulk_insertion_buffer[bulk_idx++] = doc;
+    }
+
+    bool mongo_ok = mongoc_collection_insert_many(
+            MONGODB_PATTERN_INDEX_SCHEMA,
+            (const bson_t **) bulk_insertion_buffer,
+            bulk_size,
+            MONGODB_INSERT_MANY_OPTIONS,
+            NULL,
+            &MONGODB_ERROR);
+
+    if (DEBUG && !mongo_ok) {
+        mongodb_error((char *) &MONGODB_ERROR.message);
+    }
+
+    for (unsigned int i = 0; i < bulk_size; i++) {
+        bson_destroy(bulk_insertion_buffer[i]);
+    }
+    free(bulk_insertion_buffer);
+    free(tokens);
+}
+
 static void add_redis_pattern(char **composite_key, unsigned int arity, char *value) {
     char *key = expression_hash(EXPRESSION_HASH, composite_key, arity);
     REDIS_APPEND_COMMAND_MACRO(REDIS, "ZADD %s:%s %ld %s", PATTERNS, key, PATTERNS_SCORE, value);
@@ -437,6 +525,11 @@ static void add_redis_indexes(char *hash, struct HandleList *composite, char *co
     if (arity > MAX_INDEXABLE_ARITY) {
         return;
     }
+
+    if (HIGHEST_ARITY < arity) {
+        HIGHEST_ARITY = arity;
+    }
+
     switch (arity) {
         case 4:
             for (unsigned int c1 = 0; c1 < arity; c1++) {
@@ -798,6 +891,8 @@ void finalize_actions() {
         flush_redis_commands();
     }
     REDIS_FREE_MACRO(REDIS);
+
+    add_pattern_index_schema(HIGHEST_ARITY);
     mongodb_destroy();
 
 #ifndef SUPPRESS_PROGRESS_BAR
