@@ -2,6 +2,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include "actions.h"
 #include "action_util.h"
 
@@ -10,6 +11,7 @@ extern int yyparse();
 extern FILE* yyin;
 extern void yyerror(const char* s);
 unsigned long INPUT_LINE_COUNT;
+int SKIP_REDIS_FLAG = 0;
 
 %}
 
@@ -107,14 +109,28 @@ int main(int argc, char *argv[]) {
     EMPTY_HANDLE_LIST.elements = NULL;
     EMPTY_HANDLE_LIST.elements_type = NULL;
 
-    if (argc != 2) {
-        fprintf(stderr, "Usage: %s <input file path>\n", argv[0]);
+    char *input_file = NULL;
+    
+    // Parse command line arguments
+    for (int i = 1; i < argc; i++) {
+        if (strcmp(argv[i], "--skip-redis") == 0) {
+            SKIP_REDIS_FLAG = 1;
+        } else if (input_file == NULL) {
+            input_file = argv[i];
+        } else {
+            fprintf(stderr, "Usage: %s [--skip-redis] <input file path>\n", argv[0]);
+            exit(1);
+        }
+    }
+    
+    if (input_file == NULL) {
+        fprintf(stderr, "Usage: %s [--skip-redis] <input file path>\n", argv[0]);
         exit(1);
     }
 
-    INPUT_LINE_COUNT = get_line_count(argv[1]);
+    INPUT_LINE_COUNT = get_line_count(input_file);
     
-	yyin = fopen(argv[1], "r");
+	yyin = fopen(input_file, "r");
     if (yyin == NULL) {
         yyerror("Invalid input file path\n");
         exit(1);
