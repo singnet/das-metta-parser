@@ -19,6 +19,7 @@
 extern int yylineno;
 extern unsigned long INPUT_LINE_COUNT;
 extern struct HandleList EMPTY_HANDLE_LIST;
+extern int SKIP_REDIS_FLAG;
 
 // Private stuff
 
@@ -182,6 +183,7 @@ static void mongodb_setup() {
 }
 
 unsigned long get_next_score(char* key) {
+    if (SKIP_REDIS_FLAG) return 0;
     redisReply *reply = REDIS_COMMAND_MACRO(REDIS, "GET %s", key);
     if (!reply || reply->type == REDIS_REPLY_NIL || reply->type != REDIS_REPLY_STRING) {
         if (DEBUG) fprintf(stdout, "get_next_score() failed: unexpected reply\n");
@@ -194,6 +196,7 @@ unsigned long get_next_score(char* key) {
 }
 
 bool set_next_score(char* key, unsigned long value) {
+    if (SKIP_REDIS_FLAG) return true;
     redisReply *reply = REDIS_COMMAND_MACRO(REDIS, "SET %s %ld", key, value);
     if (!reply) {
         fprintf(stdout, "set_next_score() failed: unexpected reply\n");
@@ -205,6 +208,11 @@ bool set_next_score(char* key, unsigned long value) {
 }
 
 static void redis_setup() {
+
+    if (SKIP_REDIS_FLAG) {
+        fprintf(stdout, "Skipping Redis...\n");
+        return;
+    }
 
     char *host = getenv("DAS_REDIS_HOSTNAME");
     char *port = getenv("DAS_REDIS_PORT");
@@ -318,6 +326,10 @@ static bson_t *build_symbol_bson_document(char *hash, char *name, bool is_litera
 }
 
 static void flush_redis_commands() {
+    if (SKIP_REDIS_FLAG) {
+        PENDING_REDIS_COMMANDS = 0;
+        return;
+    }
     for (unsigned int i = 0; i < PENDING_REDIS_COMMANDS; i++) {
         if (REDIS_GET_REPLY_MACRO(REDIS, NULL) != REDIS_OK) {
             fprintf(stderr, "REDIS ERROR\n");
@@ -357,8 +369,10 @@ static void flush_symbol_buffer() {
 
     bson_t **bulk_insertion_buffer = (bson_t **) malloc(new_size * sizeof(bson_t *));
     for (unsigned int i = 0; i < new_size; i++) {
-        REDIS_APPEND_COMMAND_MACRO(REDIS, "SET %s:%s %s" , NAMED_ENTITIES, SYMBOL_BUFFER[i].hash, SYMBOL_BUFFER[i].name);
-        PENDING_REDIS_COMMANDS++;
+        if (!SKIP_REDIS_FLAG) {
+            REDIS_APPEND_COMMAND_MACRO(REDIS, "SET %s:%s %s" , NAMED_ENTITIES, SYMBOL_BUFFER[i].hash, SYMBOL_BUFFER[i].name);
+            PENDING_REDIS_COMMANDS++;
+        }
         bulk_insertion_buffer[i] = build_symbol_bson_document(
                 SYMBOL_BUFFER[i].hash,
                 SYMBOL_BUFFER[i].name,
@@ -460,6 +474,7 @@ static void add_pattern_index_schema(unsigned int arity, unsigned int priority) 
 }
 
 static void add_redis_pattern(char **composite_key, unsigned int arity, char *value) {
+    if (SKIP_REDIS_FLAG) return;
     char *key = expression_hash(EXPRESSION_HASH, composite_key, arity);
     REDIS_APPEND_COMMAND_MACRO(REDIS, "ZADD %s:%s %ld %s", PATTERNS, key, PATTERNS_SCORE, value);
     PATTERNS_SCORE++;
@@ -468,6 +483,8 @@ static void add_redis_pattern(char **composite_key, unsigned int arity, char *va
 }
 
 static void add_redis_indexes(char *hash, struct HandleList *composite, char *composite_type_hash) {
+
+    if (SKIP_REDIS_FLAG) return;
 
     unsigned int arity = composite->size;
     if (arity > MAX_ARITY) {
@@ -874,7 +891,9 @@ void finalize_actions() {
     if (PENDING_REDIS_COMMANDS > 0) {
         flush_redis_commands();
     }
-    REDIS_FREE_MACRO(REDIS);
+    if (!SKIP_REDIS_FLAG) {
+        REDIS_FREE_MACRO(REDIS);
+    }
 
     // Less common arity
     add_pattern_index_schema(4, 1);
