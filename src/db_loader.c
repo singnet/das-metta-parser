@@ -330,9 +330,16 @@ static void flush_redis_commands() {
         PENDING_REDIS_COMMANDS = 0;
         return;
     }
+    
+    redisReply *reply = NULL;
+    
     for (unsigned int i = 0; i < PENDING_REDIS_COMMANDS; i++) {
-        if (REDIS_GET_REPLY_MACRO(REDIS, NULL) != REDIS_OK) {
+        if (REDIS_GET_REPLY_MACRO(REDIS, (void**)&reply) != REDIS_OK) {
             fprintf(stderr, "REDIS ERROR\n");
+        }
+        if (reply) {
+            freeReplyObject(reply);
+            reply = NULL;
         }
     }
     PENDING_REDIS_COMMANDS = 0;
