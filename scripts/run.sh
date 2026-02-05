@@ -7,9 +7,9 @@ CONTAINER_NAME="das-metta-parser-run"
 docker run \
     --net="host" \
     --name=$CONTAINER_NAME \
-    --env DAS_REDIS_HOSTNAME="0.0.0.0" \
+    --env DAS_REDIS_HOSTNAME="139.84.157.32" \
     --env DAS_REDIS_PORT=40020 \
-    --env DAS_MONGODB_HOSTNAME="45.63.74.12" \
+    --env DAS_MONGODB_HOSTNAME="0.0.0.0" \
     --env DAS_MONGODB_PORT=40021 \
     --env DAS_MONGODB_USERNAME="admin" \
     --env DAS_MONGODB_PASSWORD="admin" \

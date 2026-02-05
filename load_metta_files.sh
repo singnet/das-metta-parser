@@ -1,8 +1,8 @@
 #!/bin/bash
 
-INPUT_DIR="/home/marco/das-database-adapter/knowledge_base/context_extended/all_metta_files"
-TIMES_FILE="/home/marco/das-database-adapter/knowledge_base/context_extended/execution_times_cluster.txt"
-DETAILED_LOG="/home/marco/das-database-adapter/knowledge_base/context_extended/detailed_execution_cluster.log"
+INPUT_DIR="/home/marco/extended_context"
+TIMES_FILE="/home/marco/extended_context/execution_times_cluster_04022026.txt"
+DETAILED_LOG="/home/marco/extended_context/detailed_execution_cluster_04022026.log"
 TOTAL_START=$(date +%s.%N)
 BIN_FILE="db_loader_redis_cluster"
 
